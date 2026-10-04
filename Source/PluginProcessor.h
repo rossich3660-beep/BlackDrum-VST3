@@ -29,6 +29,8 @@ public:
     float getBodyMix() const { return bodyMix.load(); }
     void setSnareNoiseEnabled(bool enabled) { snareNoiseEnabled.store(enabled); }
     bool isSnareNoiseEnabled() const { return snareNoiseEnabled.load(); }
+    void setSpectralMix(float value) { spectralMix.store(juce::jlimit(0.0f, 1.0f, value)); }
+    float getSpectralMix() const { return spectralMix.load(); }
 
 private:
     juce::AudioFormatManager formats;
@@ -44,6 +46,9 @@ private:
     float hitVelocity=0.5f;
     std::atomic<float> bodyMix { 0.35f };
     std::atomic<bool> snareNoiseEnabled { false };
+    std::atomic<float> spectralMix { 0.0f };
+    float spectralLow[2] = { 0.0f, 0.0f };
+    float spectralPrev[2] = { 0.0f, 0.0f };
     uint32_t noiseState = 0x6d2b79f5u;
     float noiseLowState[2] = { 0.0f, 0.0f };
     juce::CriticalSection sampleLock;
