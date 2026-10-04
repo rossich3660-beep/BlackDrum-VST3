@@ -15,6 +15,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     filterState[0] = filterState[1] = 0.0f;
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
     noiseLowState[0] = noiseLowState[1] = 0.0f;
+    spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -82,6 +83,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 filterState[0] = filterState[1] = 0.0f;
                 resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
                 noiseLowState[0] = noiseLowState[1] = 0.0f;
+                spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
             }
             ++event;
         }
@@ -119,6 +121,21 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity))
                                            * voiceGain * transient * 1.10f);
 
+            // Lightweight spectral resynthesis-inspired layer: split the source into
+            // low tonal body, high-frequency residual and transient difference.
+            const float specAmount = spectralMix.load();
+            spectralLow[fc] += 0.075f * (raw - spectralLow[fc]);
+            const float tonal = spectralLow[fc];
+            const float residual = raw - tonal;
+            const float transientPart = raw - spectralPrev[fc];
+            spectralPrev[fc] = raw;
+            const float transientEnv = std::exp(-elapsed * 5.0f);
+            const float spectralLayer = tonal * (0.92f + 0.24f * velocity)
+                + residual * (0.72f + 0.50f * velocity)
+                + transientPart * transientEnv * (0.10f + 0.20f * velocity);
+            const float spectralOut = shaped * (1.0f - specAmount)
+                + std::tanh(spectralLayer * voiceGain * transient * 1.10f) * specAmount;
+
             // Snare-wire layer: deterministic filtered noise, excited by the hit and
             // shaped by the sample's own decay. No allocation or locking in the audio loop.
             float wire = 0.0f;
@@ -134,7 +151,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 const float excitation = (0.012f + 0.095f * velocity) * decay;
                 wire = bandNoise * excitation;
             }
-            out.setSample(ch, i, std::tanh(shaped + wire));
+            out.setSample(ch, i, std::tanh(spectralOut + wire));
         }
         playbackPosition += playbackRate;
     }
