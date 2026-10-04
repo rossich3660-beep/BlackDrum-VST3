@@ -14,6 +14,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     playbackPosition = -1.0;
     filterState[0] = filterState[1] = 0.0f;
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
+    noiseLowState[0] = noiseLowState[1] = 0.0f;
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -80,6 +81,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 playbackPosition = 0.0;
                 filterState[0] = filterState[1] = 0.0f;
                 resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
+                noiseLowState[0] = noiseLowState[1] = 0.0f;
             }
             ++event;
         }
@@ -116,7 +118,23 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const float blended = raw * (1.0f - resonanceMix) + body * resonanceMix;
             const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity))
                                            * voiceGain * transient * 1.10f);
-            out.setSample(ch, i, shaped);
+
+            // Snare-wire layer: deterministic filtered noise, excited by the hit and
+            // shaped by the sample's own decay. No allocation or locking in the audio loop.
+            float wire = 0.0f;
+            if (snareNoiseEnabled.load())
+            {
+                noiseState ^= noiseState << 13;
+                noiseState ^= noiseState >> 17;
+                noiseState ^= noiseState << 5;
+                const float white = ((float)(noiseState & 0x00ffffffu) / 8388607.5f) - 1.0f;
+                noiseLowState[fc] += 0.22f * (white - noiseLowState[fc]);
+                const float bandNoise = white - noiseLowState[fc];
+                const float decay = std::exp(-playbackPosition / (float)(sourceRate * (0.10f + 0.12f * velocity)));
+                const float excitation = (0.012f + 0.095f * velocity) * decay;
+                wire = bandNoise * excitation;
+            }
+            out.setSample(ch, i, std::tanh(shaped + wire));
         }
         playbackPosition += playbackRate;
     }
