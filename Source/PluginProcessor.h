@@ -73,6 +73,7 @@ private:
     std::atomic<bool> membraneEnabled { false };
     std::atomic<float> membraneTension { 0.5f }, membraneStiffness { 0.4f }, membraneDecay { 0.5f }, membraneVelocity { 0.6f };
     float membraneY1[2] = { 0.0f, 0.0f }, membraneY2[2] = { 0.0f, 0.0f };
+    float membraneUpperY1[2] = { 0.0f, 0.0f }, membraneUpperY2[2] = { 0.0f, 0.0f };
     float membranePrev[2] = { 0.0f, 0.0f };
     float spectralLow[2] = { 0.0f, 0.0f };
     float spectralPrev[2] = { 0.0f, 0.0f };
