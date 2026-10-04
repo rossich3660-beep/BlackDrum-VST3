@@ -94,6 +94,22 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 playbackRate = (float)(sourceRate / outputRate) * (0.992f + 0.032f * std::pow(v, 1.8f - 1.25f * dynamicResponse.load())) * hitPitchVariation;
                 const float cutoff = 1400.0f + std::pow(v, 1.8f - 1.25f * dynamicResponse.load()) * 14400.0f;
                 filterCoefficient = 1.0f - std::exp(-2.0f * juce::MathConstants<float>::pi * cutoff / sr);
+                // Allocate a voice within the configured limit. Prefer an idle slot;
+                // otherwise steal the oldest active voice, with no audio-thread allocation.
+                const int limit = juce::jlimit(1, 16, voiceCount.load());
+                int slot = -1;
+                for (int vi = 0; vi < limit; ++vi)
+                    if (voices[(size_t)vi].position < 0.0 || voices[(size_t)vi].position >= sample.getNumSamples())
+                    { slot = vi; break; }
+                if (slot < 0)
+                {
+                    slot = 0;
+                    for (int vi = 1; vi < limit; ++vi)
+                        if (voices[(size_t)vi].age < voices[(size_t)slot].age) slot = vi;
+                }
+                voices[(size_t)slot].position = 0.0;
+                voices[(size_t)slot].velocity = hitVelocity;
+                voices[(size_t)slot].age = ++voiceAge;
                 playbackPosition = 0.0;
                 filterState[0] = filterState[1] = 0.0f;
                 resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
@@ -104,8 +120,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             ++event;
         }
 
-        if (playbackPosition < 0.0 || playbackPosition >= (double)sample.getNumSamples())
-            continue;
+        bool anyActiveVoice = false;
+        for (int vi = 0; vi < juce::jlimit(1, 16, voiceCount.load()); ++vi)
+            if (voices[(size_t)vi].position >= 0.0 && voices[(size_t)vi].position < sample.getNumSamples())
+            { anyActiveVoice = true; break; }
+        if (!anyActiveVoice) continue;
 
         const int idx = (int)playbackPosition;
         const int next = juce::jmin(idx + 1, sample.getNumSamples() - 1);
@@ -125,9 +144,22 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         {
             const int sc = juce::jmin(ch, sample.getNumChannels() - 1);
             const int fc = juce::jmin(ch, 1);
-            const float a = sample.getSample(sc, idx);
-            const float b = sample.getSample(sc, next);
-            const float raw = a + (b - a) * frac;
+            float raw = 0.0f;
+            int activeCount = 0;
+            const int limit = juce::jlimit(1, 16, voiceCount.load());
+            for (int vi = 0; vi < limit; ++vi)
+            {
+                const double pos = voices[(size_t)vi].position;
+                if (pos < 0.0 || pos >= sample.getNumSamples()) continue;
+                const int voiceIdx = (int)pos;
+                const int voiceNext = juce::jmin(voiceIdx + 1, sample.getNumSamples() - 1);
+                const float voiceFrac = (float)(pos - voiceIdx);
+                const float a = sample.getSample(sc, voiceIdx);
+                const float b = sample.getSample(sc, voiceNext);
+                raw += a + (b - a) * voiceFrac;
+                ++activeCount;
+            }
+            if (activeCount > 1) raw *= 1.0f / std::sqrt((float)activeCount);
 
             filterState[fc] += filterCoefficient * (raw - filterState[fc]);
             const float bright = filterState[fc];
@@ -203,6 +235,14 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             }
             out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire + membrane));
         }
+        const int activeLimit = juce::jlimit(1, 16, voiceCount.load());
+        for (int vi = 0; vi < activeLimit; ++vi)
+            if (voices[(size_t)vi].position >= 0.0)
+            {
+                voices[(size_t)vi].position += playbackRate;
+                if (voices[(size_t)vi].position >= sample.getNumSamples())
+                    voices[(size_t)vi].position = -1.0;
+            }
         playbackPosition += playbackRate;
     }
 }
