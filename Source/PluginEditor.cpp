@@ -191,17 +191,17 @@ void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
     g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff303030));
     g.drawRoundedRectangle(bounds.reduced(14.0f), 14.0f, dragHover ? 2.5f : 1.0f);
 
-    auto area = juce::Rectangle<float>(35.0f, 112.0f, static_cast<float>(getWidth() - 70), 190.0f);
+    auto area = juce::Rectangle<float>(35.0f, 145.0f, static_cast<float>(getWidth() - 70), 195.0f);
     g.setColour(dragHover ? juce::Colour(0xff202a33) : juce::Colour(0xff151515));
     g.fillRoundedRectangle(area, 12.0f);
     g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff484848));
     g.drawRoundedRectangle(area, 12.0f, 1.5f);
 
     g.setColour(juce::Colour(0xffbdbdbd));
-    g.drawEllipse(getWidth() / 2.0f - 22.0f, 145.0f, 44.0f, 44.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f, 155.0f, getWidth() / 2.0f, 179.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f - 8.0f, 170.0f, getWidth() / 2.0f, 179.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f + 8.0f, 170.0f, getWidth() / 2.0f, 179.0f, 2.0f);
+    g.drawEllipse(getWidth() / 2.0f - 22.0f, 175.0f, 44.0f, 44.0f, 2.0f);
+    g.drawLine(getWidth() / 2.0f, 185.0f, getWidth() / 2.0f, 209.0f, 2.0f);
+    g.drawLine(getWidth() / 2.0f - 8.0f, 200.0f, getWidth() / 2.0f, 209.0f, 2.0f);
+    g.drawLine(getWidth() / 2.0f + 8.0f, 200.0f, getWidth() / 2.0f, 209.0f, 2.0f);
 }
 
 void BlackDrumAudioProcessorEditor::resized()
