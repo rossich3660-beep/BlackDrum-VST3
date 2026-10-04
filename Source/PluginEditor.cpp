@@ -5,7 +5,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
  hint.setText("Drop an audio file here  •  WAV / AIFF / FLAC / OGG",juce::dontSendNotification); hint.setJustificationType(juce::Justification::centred); hint.setColour(juce::Label::textColourId,juce::Colour(0xff929292)); addAndMakeVisible(hint);
  for(auto* b:{&loadButton,&playButton,&removeButton}){addAndMakeVisible(b); b->setColour(juce::TextButton::buttonColourId,juce::Colour(0xff292929)); b->setColour(juce::TextButton::textColourOffId,juce::Colours::white);}
  loadButton.onClick=[this]{juce::FileChooser c("Choose a sample",juce::File{},"*.wav;*.aiff;*.aif;*.flac;*.ogg"); c.launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,[this](const juce::FileChooser& fc){if(fc.getResult().existsAsFile()) loadFrom(fc.getResult());});};
- playButton.onClick=[this]{juce::MidiBuffer mb; mb.addEvent(juce::MidiMessage::noteOn(1,60,100),0); /* preview via MIDI host; sample preview UI is added later */};
+ playButton.onClick=[this]{juce::MidiBuffer mb; mb.addEvent(juce::MidiMessage::noteOn(1,60,juce::uint8(100)),0); /* preview via MIDI host; sample preview UI is added later */};
  removeButton.onClick=[this]{filename.setText("No sample loaded",juce::dontSendNotification);};
 }
 void BlackDrumAudioProcessorEditor::loadFrom(const juce::File& f){if(processor.loadSample(f)) filename.setText(f.getFileName()+"  •  "+juce::String(f.getSize()/1024)+" KB",juce::dontSendNotification);}
