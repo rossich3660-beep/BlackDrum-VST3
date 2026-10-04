@@ -35,9 +35,10 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
             "Choose an audio sample", juce::File{},
             "*.wav;*.aiff;*.aif;*.flac;*.ogg");
 
+        juce::Component::SafePointer<BlackDrumAudioProcessorEditor> safeThis(this);
         fileChooser->launchAsync(
             juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-            [safeThis = juce::Component::SafePointer<BlackDrumAudioProcessorEditor>(this)]
+            [safeThis]
             (const juce::FileChooser& chooser)
             {
                 if (safeThis == nullptr)
