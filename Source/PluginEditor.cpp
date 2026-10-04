@@ -3,7 +3,7 @@
 BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(760, 430);
+    setSize(900, 570);
     title.setText("BLACKDRUM", juce::dontSendNotification);
     title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -61,6 +61,19 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
     setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
     setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
+
+    membraneTitle.setText("MEMBRANE MODELING", juce::dontSendNotification);
+    membraneTitle.setFont(juce::Font(juce::FontOptions(19.0f, juce::Font::bold)));
+    membraneTitle.setColour(juce::Label::textColourId, juce::Colour(0xffd8eaf5));
+    addAndMakeVisible(membraneTitle);
+    membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
+    membraneToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
+    membraneToggle.onClick = [this] { processor.setMembraneEnabled(membraneToggle.getToggleState()); };
+    addAndMakeVisible(membraneToggle);
+    setupKnob(tensionSlider, tensionLabel, "TENSION", processor.getMembraneTension(), [this](float v){ processor.setMembraneTension(v); });
+    setupKnob(stiffnessSlider, stiffnessLabel, "STIFFNESS", processor.getMembraneStiffness(), [this](float v){ processor.setMembraneStiffness(v); });
+    setupKnob(decaySlider, decayLabel, "DECAY", processor.getMembraneDecay(), [this](float v){ processor.setMembraneDecay(v); });
+    setupKnob(velocitySlider, velocityLabel, "VELOCITY SENS", processor.getMembraneVelocity(), [this](float v){ processor.setMembraneVelocity(v); });
 
     for (auto* b : { &loadButton, &playButton, &removeButton })
     {
@@ -185,38 +198,58 @@ void BlackDrumAudioProcessorEditor::filesDropped(const juce::StringArray& files,
 
 void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff111111));
+    g.fillAll(juce::Colour(0xff0b1115));
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(0xff1b1b1b));
-    g.fillRoundedRectangle(bounds.reduced(14.0f), 14.0f);
-    g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff303030));
-    g.drawRoundedRectangle(bounds.reduced(14.0f), 14.0f, dragHover ? 2.5f : 1.0f);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff17242c), 0.0f, 0.0f,
+                                           juce::Colour(0xff090d10), (float)getWidth(), (float)getHeight(), false));
+    g.fillRoundedRectangle(bounds.reduced(12.0f), 16.0f);
+    g.setColour(juce::Colour(0xff34434b));
+    g.drawRoundedRectangle(bounds.reduced(12.0f), 16.0f, 1.2f);
 
-    auto area = juce::Rectangle<float>(35.0f, 145.0f, static_cast<float>(getWidth() - 70), 195.0f);
-    g.setColour(dragHover ? juce::Colour(0xff202a33) : juce::Colour(0xff151515));
-    g.fillRoundedRectangle(area, 12.0f);
-    g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff484848));
-    g.drawRoundedRectangle(area, 12.0f, 1.5f);
+    auto panel = juce::Rectangle<float>(30.0f, 140.0f, (float)getWidth() - 60.0f, 220.0f);
+    g.setColour(juce::Colour(0xaa081116));
+    g.fillRoundedRectangle(panel, 14.0f);
+    g.setColour(juce::Colour(0xff354c58));
+    g.drawRoundedRectangle(panel, 14.0f, 1.0f);
 
-    g.setColour(juce::Colour(0xffbdbdbd));
-    g.drawEllipse(getWidth() / 2.0f - 22.0f, 175.0f, 44.0f, 44.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f, 185.0f, getWidth() / 2.0f, 209.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f - 8.0f, 200.0f, getWidth() / 2.0f, 209.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f + 8.0f, 200.0f, getWidth() / 2.0f, 209.0f, 2.0f);
+    // Small hand-drawn snare illustration, inspired by the supplied vintage patent plate.
+    const float cx = 150.0f, cy = 260.0f;
+    g.setColour(juce::Colour(0xff8ab9d4));
+    g.drawEllipse(cx - 70.0f, cy - 43.0f, 140.0f, 30.0f, 1.5f);
+    g.drawLine(cx - 70.0f, cy - 28.0f, cx - 66.0f, cy + 25.0f, 1.5f);
+    g.drawLine(cx + 70.0f, cy - 28.0f, cx + 66.0f, cy + 25.0f, 1.5f);
+    g.drawArc(cx - 66.0f, cy + 8.0f, 132.0f, 30.0f, 0.0f, juce::MathConstants<float>::pi, 1.5f);
+    g.drawEllipse(cx - 66.0f, cy + 9.0f, 132.0f, 30.0f, 1.0f);
+    for (int k = -2; k <= 2; ++k)
+    {
+        const float x = cx + (float)k * 27.0f;
+        g.drawLine(x, cy - 31.0f, x, cy + 29.0f, 1.0f);
+        g.fillEllipse(x - 2.5f, cy - 8.0f, 5.0f, 5.0f);
+    }
+    g.setColour(juce::Colour(0xff5aaee0));
+    g.drawLine(290.0f, 168.0f, 290.0f, 337.0f, 1.0f);
+
+    auto drop = juce::Rectangle<float>(35.0f, 380.0f, (float)getWidth() - 70.0f, 125.0f);
+    g.setColour(dragHover ? juce::Colour(0xff172936) : juce::Colour(0xff101619));
+    g.fillRoundedRectangle(drop, 12.0f);
+    g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff3b4a51));
+    g.drawRoundedRectangle(drop, 12.0f, dragHover ? 2.0f : 1.0f);
+    g.setColour(juce::Colour(0xff9cb2bf));
+    g.drawEllipse(getWidth() / 2.0f - 18.0f, 395.0f, 36.0f, 36.0f, 1.8f);
+    g.drawLine(getWidth() / 2.0f, 402.0f, getWidth() / 2.0f, 424.0f, 1.8f);
+    g.drawLine(getWidth() / 2.0f - 7.0f, 417.0f, getWidth() / 2.0f, 424.0f, 1.8f);
+    g.drawLine(getWidth() / 2.0f + 7.0f, 417.0f, getWidth() / 2.0f, 424.0f, 1.8f);
 }
-
 void BlackDrumAudioProcessorEditor::resized()
 {
-    title.setBounds(35, 28, 220, 45);
-    hint.setBounds(45, 255, getWidth() - 90, 30);
-    filename.setBounds(45, 292, getWidth() - 90, 25);
-    const int knobY = 48, labelY = 28, knobW = 60, gap = 8;
+    title.setBounds(35, 28, 330, 48);
+    const int knobW = 58, gap = 7, labelY = 27, knobY = 48;
     const int total = 6 * knobW + 5 * gap;
-    const int x0 = getWidth() - total - 32;
+    const int x0 = getWidth() - total - 28;
     auto place = [&](juce::Label& label, juce::Slider& slider, int index)
     {
         const int x = x0 + index * (knobW + gap);
-        label.setBounds(x - 5, labelY, knobW + 10, 20);
+        label.setBounds(x - 8, labelY, knobW + 16, 20);
         slider.setBounds(x, knobY, knobW, knobW);
     };
     place(spectralLabel, spectralSlider, 0);
@@ -225,7 +258,23 @@ void BlackDrumAudioProcessorEditor::resized()
     place(attackLabel, attackSlider, 3);
     place(sustainLabel, sustainSlider, 4);
     place(dynamicLabel, dynamicSlider, 5);
-    loadButton.setBounds(95, 365, 165, 38);
-    playButton.setBounds(297, 365, 165, 38);
-    removeButton.setBounds(499, 365, 165, 38);
+
+    membraneTitle.setBounds(325, 157, 300, 30);
+    membraneToggle.setBounds(650, 158, 210, 28);
+    auto placeMem = [&](juce::Label& label, juce::Slider& slider, int index)
+    {
+        const int x = 340 + index * 125;
+        label.setBounds(x - 12, 205, 112, 22);
+        slider.setBounds(x, 230, 88, 88);
+    };
+    placeMem(tensionLabel, tensionSlider, 0);
+    placeMem(stiffnessLabel, stiffnessSlider, 1);
+    placeMem(decayLabel, decaySlider, 2);
+    placeMem(velocityLabel, velocitySlider, 3);
+
+    hint.setBounds(45, 438, getWidth() - 90, 24);
+    filename.setBounds(45, 465, getWidth() - 90, 24);
+    loadButton.setBounds(80, 520, 165, 36);
+    playButton.setBounds(267, 520, 165, 36);
+    removeButton.setBounds(454, 520, 165, 36);
 }
