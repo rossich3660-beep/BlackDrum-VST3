@@ -28,8 +28,9 @@ private:
  juce::AudioFormatManager formats;
  juce::AudioBuffer<float> sample;
  juce::File loadedFile;
- double sourceRate=44100.0;
- int playhead=-1;
+ double sourceRate=44100.0, outputRate=44100.0, playbackPosition= -1.0;
+ float voiceGain=1.0f, playbackRate=1.0f, filterCoefficient=1.0f;
+ float filterState[2]={0.0f,0.0f};
  juce::CriticalSection sampleLock;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
