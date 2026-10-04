@@ -96,7 +96,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         const float attackAmount = 0.04f + 0.24f * velocity;
         const float transient = 1.0f + attackAmount * std::exp(-elapsed * 3.2f);
         // Harder strikes excite slightly more modeled body, kept deliberately subtle.
-        const float resonanceMix = 0.025f + 0.075f * velocity;
+        const float resonanceMix = bodyMix.load();
 
         for (int ch = 0; ch < out.getNumChannels(); ++ch)
         {
