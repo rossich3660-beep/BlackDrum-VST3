@@ -19,6 +19,19 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     hint.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
     addAndMakeVisible(hint);
 
+    bodyMixLabel.setText("BODY MIX", juce::dontSendNotification);
+    bodyMixLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    bodyMixLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(bodyMixLabel);
+    bodyMixSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    bodyMixSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 58, 18);
+    bodyMixSlider.setRange(0.0, 1.0, 0.01);
+    bodyMixSlider.setValue(processor.getBodyMix(), juce::dontSendNotification);
+    bodyMixSlider.setNumDecimalPlacesToDisplay(0);
+    bodyMixSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    bodyMixSlider.onValueChange = [this] { processor.setBodyMix((float)bodyMixSlider.getValue()); };
+    addAndMakeVisible(bodyMixSlider);
+
     for (auto* b : { &loadButton, &playButton, &removeButton })
     {
         addAndMakeVisible(*b);
@@ -157,6 +170,8 @@ void BlackDrumAudioProcessorEditor::resized()
     dropArea = r.withTrimmedTop(110).withTrimmedBottom(90);
     hint.setBounds(45, 215, getWidth() - 90, 30);
     filename.setBounds(45, 260, getWidth() - 90, 25);
+    bodyMixLabel.setBounds(420, 28, 120, 22);
+    bodyMixSlider.setBounds(445, 45, 75, 75);
     loadButton.setBounds(65, 325, 150, 38);
     playButton.setBounds(235, 325, 150, 38);
     removeButton.setBounds(405, 325, 150, 38);
