@@ -3,7 +3,7 @@
 BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(620, 390);
+    setSize(760, 430);
     title.setText("BLACKDRUM", juce::dontSendNotification);
     title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -43,6 +43,23 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     spectralSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
     spectralSlider.onValueChange = [this] { processor.setSpectralMix((float)spectralSlider.getValue()); };
     addAndMakeVisible(spectralSlider);
+
+    auto setupKnob = [this](juce::Slider& slider, juce::Label& label, const juce::String& text, float initial, std::function<void(float)> setter)
+    {
+        label.setText(text, juce::dontSendNotification);
+        label.setColour(juce::Label::textColourId, juce::Colours::white);
+        label.setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(label);
+        slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+        slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        slider.setRange(0.0, 1.0, 0.01);
+        slider.setValue(initial, juce::dontSendNotification);
+        slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+        slider.onValueChange = [&slider, setter] { setter((float)slider.getValue()); };
+        addAndMakeVisible(slider);
+    };
+    setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
+    setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
 
     for (auto* b : { &loadButton, &playButton, &removeButton })
     {
@@ -189,18 +206,24 @@ void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
 
 void BlackDrumAudioProcessorEditor::resized()
 {
-    auto r = getLocalBounds();
-    title.setBounds(35, 28, 300, 45);
-    dropArea = r.withTrimmedTop(110).withTrimmedBottom(90);
-    hint.setBounds(45, 215, getWidth() - 90, 30);
-    filename.setBounds(45, 260, getWidth() - 90, 25);
-    bodyMixLabel.setBounds(420, 28, 120, 22);
-    bodyMixSlider.setBounds(445, 45, 75, 75);
-    spectralLabel.setBounds(285, 28, 120, 22);
-    spectralSlider.setBounds(308, 45, 75, 75);
-    wireLabel.setBounds(440, 28, 120, 22);
-    wireSlider.setBounds(463, 45, 75, 75);
-    loadButton.setBounds(65, 325, 150, 38);
-    playButton.setBounds(235, 325, 150, 38);
-    removeButton.setBounds(405, 325, 150, 38);
+    title.setBounds(35, 28, 220, 45);
+    hint.setBounds(45, 255, getWidth() - 90, 30);
+    filename.setBounds(45, 292, getWidth() - 90, 25);
+    const int knobY = 48, labelY = 28, knobW = 68, gap = 12;
+    const int total = 5 * knobW + 4 * gap;
+    const int x0 = getWidth() - total - 32;
+    auto place = [&](juce::Label& label, juce::Slider& slider, int index)
+    {
+        const int x = x0 + index * (knobW + gap);
+        label.setBounds(x - 5, labelY, knobW + 10, 20);
+        slider.setBounds(x, knobY, knobW, knobW);
+    };
+    place(spectralLabel, spectralSlider, 0);
+    place(bodyMixLabel, bodyMixSlider, 1);
+    place(wireLabel, wireSlider, 2);
+    place(attackLabel, attackSlider, 3);
+    place(sustainLabel, sustainSlider, 4);
+    loadButton.setBounds(95, 365, 165, 38);
+    playButton.setBounds(297, 365, 165, 38);
+    removeButton.setBounds(499, 365, 165, 38);
 }
