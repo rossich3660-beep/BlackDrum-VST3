@@ -16,8 +16,8 @@ private:
  BlackDrumAudioProcessor& processor;
  std::unique_ptr<juce::FileChooser> fileChooser;
  juce::TextButton loadButton{"LOAD SAMPLE"}, playButton{"PREVIEW"}, removeButton{"REMOVE"};
- juce::Label title, filename, hint, bodyMixLabel, spectralLabel, wireLabel, attackLabel, sustainLabel, dynamicLabel, membraneTitle, tensionLabel, stiffnessLabel, decayLabel, velocityLabel;
- juce::Slider bodyMixSlider, spectralSlider, wireSlider, attackSlider, sustainSlider, dynamicSlider, tensionSlider, stiffnessSlider, decaySlider, velocitySlider;
+ juce::Label title, filename, hint, voiceCountLabel; bodyMixLabel, spectralLabel, wireLabel, attackLabel, sustainLabel, dynamicLabel, membraneTitle, tensionLabel, stiffnessLabel, decayLabel, velocityLabel;
+ juce::Slider voiceCountSlider, bodyMixSlider, spectralSlider, wireSlider, attackSlider, sustainSlider, dynamicSlider, tensionSlider, stiffnessSlider, decaySlider, velocitySlider;
     juce::ToggleButton membraneToggle { "MEMBRANE MODEL" };
  juce::Rectangle<int> dropArea;
  bool dragHover=false;
