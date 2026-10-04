@@ -15,7 +15,7 @@ private:
  bool isSupportedAudioFile(const juce::File&) const;
  BlackDrumAudioProcessor& processor;
  std::unique_ptr<juce::FileChooser> fileChooser;
- juce::TextButton loadButton{"LOAD SAMPLE"}, playButton{"PREVIEW"}, removeButton{"REMOVE"};
+ juce::TextButton loadButton{"LOAD SAMPLE"}, playButton{"PREVIEW"}, removeButton{"REMOVE"}, wireButton{"WIRE NOISE: OFF"};
  juce::Label title, filename, hint, bodyMixLabel;
  juce::Slider bodyMixSlider;
  juce::Rectangle<int> dropArea;
