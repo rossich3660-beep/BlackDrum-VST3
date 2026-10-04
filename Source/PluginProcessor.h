@@ -25,6 +25,8 @@ public:
     juce::String sampleName() const { return loadedFile.getFileName(); }
     juce::AudioBuffer<float> sampleCopy() const;
     double sampleRateOfFile() const { return sourceRate; }
+    void setVoiceCount(int value) { voiceCount.store(juce::jlimit(1, 16, value)); }
+    int getVoiceCount() const { return voiceCount.load(); }
     void setBodyMix(float value) { bodyMix.store(juce::jlimit(0.0f, 1.0f, value)); }
     float getBodyMix() const { return bodyMix.load(); }
     void setWireNoiseMix(float value) { wireNoiseMix.store(juce::jlimit(0.0f, 1.0f, value)); }
@@ -52,6 +54,10 @@ private:
     juce::AudioFormatManager formats;
     juce::AudioBuffer<float> sample;
     juce::File loadedFile;
+    struct Voice { double position = -1.0; float velocity = 0.5f; uint64_t age = 0; };
+    std::array<Voice, 16> voices{};
+    std::atomic<int> voiceCount { 8 };
+    uint64_t voiceAge = 0;
     double sourceRate=44100.0, outputRate=44100.0, playbackPosition=-1.0;
     float voiceGain=1.0f, playbackRate=1.0f, filterCoefficient=1.0f;
     float filterState[2]={0.0f,0.0f};
