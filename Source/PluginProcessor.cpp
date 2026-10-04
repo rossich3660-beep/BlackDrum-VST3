@@ -74,9 +74,20 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             {
                 hitVelocity = juce::jlimit(0.0f, 1.0f, msg.getFloatVelocity());
                 const float v = hitVelocity;
+                // Small, bounded per-hit variation. The same MIDI velocity remains the
+                // main driver; randomness only prevents identical repeated strikes.
+                auto nextRandom = [this]() -> float
+                {
+                    noiseState ^= noiseState << 13; noiseState ^= noiseState >> 17; noiseState ^= noiseState << 5;
+                    return (float)(noiseState & 0x00ffffffu) / 8388607.5f - 1.0f;
+                };
+                hitPitchVariation = 1.0f + nextRandom() * (0.0015f + 0.0025f * v);
+                hitAttackVariation = 1.0f + nextRandom() * (0.035f + 0.035f * v);
+                hitResonanceVariation = 1.0f + nextRandom() * (0.04f + 0.06f * v);
+                hitNoiseVariation = 1.0f + nextRandom() * (0.10f + 0.12f * v);
                 voiceGain = 0.16f + 0.84f * v * v;
                 // Small pitch variation plus a brighter low-pass response for harder hits.
-                playbackRate = (float)(sourceRate / outputRate) * (0.992f + 0.032f * v);
+                playbackRate = (float)(sourceRate / outputRate) * (0.992f + 0.032f * v) * hitPitchVariation;
                 const float cutoff = 1800.0f + v * 13800.0f;
                 filterCoefficient = 1.0f - std::exp(-2.0f * juce::MathConstants<float>::pi * cutoff / sr);
                 playbackPosition = 0.0;
@@ -97,10 +108,10 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         const float elapsed = (float)(playbackPosition / juce::jmax(1.0, sourceRate * 0.035));
         const float velocity = hitVelocity;
         // A short velocity-scaled transient lift; decays smoothly over the first ~35 ms.
-        const float attackAmount = 0.04f + 0.24f * velocity;
+        const float attackAmount = (0.04f + 0.24f * velocity) * hitAttackVariation;
         const float transient = 1.0f + attackAmount * std::exp(-elapsed * 3.2f);
         // Harder strikes excite slightly more modeled body, kept deliberately subtle.
-        const float resonanceMix = bodyMix.load();
+        const float resonanceMix = juce::jlimit(0.0f, 1.0f, bodyMix.load() * hitResonanceVariation);
 
         for (int ch = 0; ch < out.getNumChannels(); ++ch)
         {
@@ -139,7 +150,8 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             // Snare-wire layer: deterministic filtered noise, excited by the hit and
             // shaped by the sample's own decay. No allocation or locking in the audio loop.
             float wire = 0.0f;
-            if (snareNoiseEnabled.load())
+            const float wireAmount = wireNoiseMix.load();
+            if (wireAmount > 0.0001f)
             {
                 noiseState ^= noiseState << 13;
                 noiseState ^= noiseState >> 17;
@@ -148,7 +160,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 noiseLowState[fc] += 0.22f * (white - noiseLowState[fc]);
                 const float bandNoise = white - noiseLowState[fc];
                 const float decay = std::exp(-playbackPosition / (float)(sourceRate * (0.10f + 0.12f * velocity)));
-                const float excitation = (0.012f + 0.095f * velocity) * decay;
+                const float excitation = (0.012f + 0.095f * velocity) * decay * wireAmount * hitNoiseVariation;
                 wire = bandNoise * excitation;
             }
             out.setSample(ch, i, std::tanh(spectralOut + wire));
