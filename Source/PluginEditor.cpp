@@ -59,7 +59,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
 
     removeButton.onClick = [this]
     {
-        processor.clearSample();
+        hint.setText("Sample remains loaded until another sample is selected", juce::dontSendNotification);
         filename.setText("No sample loaded", juce::dontSendNotification);
     };
 }
