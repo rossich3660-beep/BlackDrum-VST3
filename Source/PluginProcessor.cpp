@@ -16,7 +16,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
     noiseLowState[0] = noiseLowState[1] = 0.0f;
     spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
-    membraneY1[0] = membraneY1[1] = membraneY2[0] = membraneY2[1] = membranePrev[0] = membranePrev[1] = 0.0f;
+    membraneY1[0] = membraneY1[1] = membraneY2[0] = membraneY2[1] = membraneUpperY1[0] = membraneUpperY1[1] = membraneUpperY2[0] = membraneUpperY2[1] = membranePrev[0] = membranePrev[1] = 0.0f;
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -195,10 +195,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 membraneY1[fc] = juce::jlimit(-4.0f, 4.0f, mode0);
                 const float upperRadius = radius * (0.965f - 0.025f * stiffness);
                 const float mode1 = drive * (0.008f + 0.025f * stiffness * modeledVelocity)
-                    + 2.0f * upperRadius * std::cos(w1) * membraneY2[fc]
-                    - upperRadius * upperRadius * membranePrev[fc] * 0.0f;
-                // Keep upper mode state separate by using a bounded, lightly coupled component.
-                membrane = membraneY1[fc] * 0.18f + mode1 * 0.025f;
+                    + 2.0f * upperRadius * std::cos(w1) * membraneUpperY1[fc]
+                    - upperRadius * upperRadius * membraneUpperY2[fc];
+                membraneUpperY2[fc] = membraneUpperY1[fc];
+                membraneUpperY1[fc] = juce::jlimit(-4.0f, 4.0f, mode1);
+                membrane = membraneY1[fc] * 0.18f + membraneUpperY1[fc] * 0.08f;
             }
             out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire + membrane));
         }
