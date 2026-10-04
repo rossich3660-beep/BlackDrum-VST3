@@ -85,10 +85,13 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 hitAttackVariation = 1.0f + nextRandom() * (0.035f + 0.035f * v);
                 hitResonanceVariation = 1.0f + nextRandom() * (0.04f + 0.06f * v);
                 hitNoiseVariation = 1.0f + nextRandom() * (0.10f + 0.12f * v);
-                voiceGain = 0.16f + 0.84f * v * v;
+                const float response = dynamicResponse.load();
+                const float exponent = 1.8f - 1.25f * response;
+                const float shapedVelocity = std::pow(v, exponent);
+                voiceGain = 0.12f + 0.88f * shapedVelocity * shapedVelocity;
                 // Small pitch variation plus a brighter low-pass response for harder hits.
-                playbackRate = (float)(sourceRate / outputRate) * (0.992f + 0.032f * v) * hitPitchVariation;
-                const float cutoff = 1800.0f + v * 13800.0f;
+                playbackRate = (float)(sourceRate / outputRate) * (0.992f + 0.032f * std::pow(v, 1.8f - 1.25f * dynamicResponse.load())) * hitPitchVariation;
+                const float cutoff = 1400.0f + std::pow(v, 1.8f - 1.25f * dynamicResponse.load()) * 14400.0f;
                 filterCoefficient = 1.0f - std::exp(-2.0f * juce::MathConstants<float>::pi * cutoff / sr);
                 playbackPosition = 0.0;
                 filterState[0] = filterState[1] = 0.0f;
@@ -106,7 +109,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         const int next = juce::jmin(idx + 1, sample.getNumSamples() - 1);
         const float frac = (float)(playbackPosition - idx);
         const float elapsed = (float)(playbackPosition / juce::jmax(1.0, sourceRate * 0.035));
-        const float velocity = hitVelocity;
+        const float velocity = std::pow(hitVelocity, 1.8f - 1.25f * dynamicResponse.load());
         // A short velocity-scaled transient lift; decays smoothly over the first ~35 ms.
         const float attackControl = (transientAmount.load() - 0.5f) * 1.4f;
         const float sustainControl = (sustainAmount.load() - 0.5f) * 1.2f;
