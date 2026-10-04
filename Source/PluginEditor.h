@@ -16,7 +16,8 @@ private:
  BlackDrumAudioProcessor& processor;
  std::unique_ptr<juce::FileChooser> fileChooser;
  juce::TextButton loadButton{"LOAD SAMPLE"}, playButton{"PREVIEW"}, removeButton{"REMOVE"};
- juce::Label title, filename, hint;
+ juce::Label title, filename, hint, bodyMixLabel;
+ juce::Slider bodyMixSlider;
  juce::Rectangle<int> dropArea;
  bool dragHover=false;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessorEditor)
