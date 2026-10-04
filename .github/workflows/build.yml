@@ -1,0 +1,28 @@
+name: Build BlackDrum VST3
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: microsoft/setup-msbuild@v2
+      - uses: lukka/get-cmake@latest
+      - name: Configure
+        run: cmake -B build -S . -A x64
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Package VST3
+        shell: pwsh
+        run: |
+          $plugin = Get-ChildItem build -Recurse -Directory -Filter "BlackDrum.vst3" | Select-Object -First 1
+          if (-not $plugin) { throw "VST3 bundle not found" }
+          Compress-Archive -Path $plugin.FullName -DestinationPath BlackDrum-VST3-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlackDrum-VST3-Windows
+          path: BlackDrum-VST3-Windows.zip
