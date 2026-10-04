@@ -27,8 +27,8 @@ public:
     double sampleRateOfFile() const { return sourceRate; }
     void setBodyMix(float value) { bodyMix.store(juce::jlimit(0.0f, 1.0f, value)); }
     float getBodyMix() const { return bodyMix.load(); }
-    void setSnareNoiseEnabled(bool enabled) { snareNoiseEnabled.store(enabled); }
-    bool isSnareNoiseEnabled() const { return snareNoiseEnabled.load(); }
+    void setWireNoiseMix(float value) { wireNoiseMix.store(juce::jlimit(0.0f, 1.0f, value)); }
+    float getWireNoiseMix() const { return wireNoiseMix.load(); }
     void setSpectralMix(float value) { spectralMix.store(juce::jlimit(0.0f, 1.0f, value)); }
     float getSpectralMix() const { return spectralMix.load(); }
 
@@ -45,7 +45,11 @@ private:
     float resonatorA1=0.0f, resonatorA2=0.0f;
     float hitVelocity=0.5f;
     std::atomic<float> bodyMix { 0.35f };
-    std::atomic<bool> snareNoiseEnabled { false };
+    std::atomic<float> wireNoiseMix { 0.0f };
+    float hitPitchVariation = 1.0f;
+    float hitAttackVariation = 1.0f;
+    float hitResonanceVariation = 1.0f;
+    float hitNoiseVariation = 1.0f;
     std::atomic<float> spectralMix { 0.0f };
     float spectralLow[2] = { 0.0f, 0.0f };
     float spectralPrev[2] = { 0.0f, 0.0f };
