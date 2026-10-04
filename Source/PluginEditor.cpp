@@ -60,6 +60,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     };
     setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
     setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
+    setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
 
     for (auto* b : { &loadButton, &playButton, &removeButton })
     {
@@ -209,8 +210,8 @@ void BlackDrumAudioProcessorEditor::resized()
     title.setBounds(35, 28, 220, 45);
     hint.setBounds(45, 255, getWidth() - 90, 30);
     filename.setBounds(45, 292, getWidth() - 90, 25);
-    const int knobY = 48, labelY = 28, knobW = 68, gap = 12;
-    const int total = 5 * knobW + 4 * gap;
+    const int knobY = 48, labelY = 28, knobW = 60, gap = 8;
+    const int total = 6 * knobW + 5 * gap;
     const int x0 = getWidth() - total - 32;
     auto place = [&](juce::Label& label, juce::Slider& slider, int index)
     {
@@ -223,6 +224,7 @@ void BlackDrumAudioProcessorEditor::resized()
     place(wireLabel, wireSlider, 2);
     place(attackLabel, attackSlider, 3);
     place(sustainLabel, sustainSlider, 4);
+    place(dynamicLabel, dynamicSlider, 5);
     loadButton.setBounds(95, 365, 165, 38);
     playButton.setBounds(297, 365, 165, 38);
     removeButton.setBounds(499, 365, 165, 38);
