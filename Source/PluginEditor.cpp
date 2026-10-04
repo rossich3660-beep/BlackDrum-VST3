@@ -14,7 +14,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     filename.setColour(juce::Label::textColourId, juce::Colour(0xffeeeeee));
     addAndMakeVisible(filename);
 
-    hint.setText("Drop an audio file here  •  WAV / AIFF / FLAC / OGG", juce::dontSendNotification);
+    hint.setText("Drop an audio file here - WAV / AIFF / FLAC / OGG", juce::dontSendNotification);
     hint.setJustificationType(juce::Justification::centred);
     hint.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
     addAndMakeVisible(hint);
@@ -24,7 +24,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     bodyMixLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(bodyMixLabel);
     bodyMixSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    bodyMixSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 58, 18);
+    bodyMixSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     bodyMixSlider.setRange(0.0, 1.0, 0.01);
     bodyMixSlider.setValue(processor.getBodyMix(), juce::dontSendNotification);
     bodyMixSlider.setNumDecimalPlacesToDisplay(0);
@@ -95,7 +95,7 @@ void BlackDrumAudioProcessorEditor::loadFrom(const juce::File& file)
 
     if (processor.loadSample(file))
     {
-        filename.setText(file.getFileName() + "  •  "
+        filename.setText(file.getFileName() + " - "
             + juce::String(static_cast<juce::int64>(file.getSize() / 1024)) + " KB",
             juce::dontSendNotification);
         hint.setText("Sample loaded successfully", juce::dontSendNotification);
