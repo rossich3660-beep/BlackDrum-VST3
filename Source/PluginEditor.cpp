@@ -44,22 +44,24 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     spectralSlider.onValueChange = [this] { processor.setSpectralMix((float)spectralSlider.getValue()); };
     addAndMakeVisible(spectralSlider);
 
-    for (auto* b : { &loadButton, &playButton, &removeButton, &wireButton })
+    for (auto* b : { &loadButton, &playButton, &removeButton })
     {
         addAndMakeVisible(*b);
         b->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292929));
         b->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     }
 
-    wireButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff245a78));
-    wireButton.setClickingTogglesState(true);
-    wireButton.setToggleState(processor.isSnareNoiseEnabled(), juce::dontSendNotification);
-    wireButton.onClick = [this]
-    {
-        const bool enabled = wireButton.getToggleState();
-        processor.setSnareNoiseEnabled(enabled);
-        wireButton.setButtonText(enabled ? "WIRE NOISE: ON" : "WIRE NOISE: OFF");
-    };
+    wireLabel.setText("WIRE NOISE", juce::dontSendNotification);
+    wireLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    wireLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(wireLabel);
+    wireSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    wireSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    wireSlider.setRange(0.0, 1.0, 0.01);
+    wireSlider.setValue(processor.getWireNoiseMix(), juce::dontSendNotification);
+    wireSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    wireSlider.onValueChange = [this] { processor.setWireNoiseMix((float)wireSlider.getValue()); };
+    addAndMakeVisible(wireSlider);
 
     loadButton.onClick = [this]
     {
@@ -196,7 +198,8 @@ void BlackDrumAudioProcessorEditor::resized()
     bodyMixSlider.setBounds(445, 45, 75, 75);
     spectralLabel.setBounds(285, 28, 120, 22);
     spectralSlider.setBounds(308, 45, 75, 75);
-    wireButton.setBounds(410, 125, 145, 30);
+    wireLabel.setBounds(440, 28, 120, 22);
+    wireSlider.setBounds(463, 45, 75, 75);
     loadButton.setBounds(65, 325, 150, 38);
     playButton.setBounds(235, 325, 150, 38);
     removeButton.setBounds(405, 325, 150, 38);
