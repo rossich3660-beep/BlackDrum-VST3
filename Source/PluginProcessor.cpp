@@ -16,6 +16,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
     noiseLowState[0] = noiseLowState[1] = 0.0f;
     spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
+    membraneY1[0] = membraneY1[1] = membraneY2[0] = membraneY2[1] = membranePrev[0] = membranePrev[1] = 0.0f;
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -98,6 +99,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
                 noiseLowState[0] = noiseLowState[1] = 0.0f;
                 spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
+                membraneY1[0] = membraneY1[1] = membraneY2[0] = membraneY2[1] = membranePrev[0] = membranePrev[1] = 0.0f;
             }
             ++event;
         }
@@ -169,7 +171,36 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 const float excitation = (0.012f + 0.095f * velocity) * decay * wireAmount * hitNoiseVariation;
                 wire = bandNoise * excitation;
             }
-            out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire));
+            float membrane = 0.0f;
+            if (membraneEnabled.load())
+            {
+                const float tension = membraneTension.load();
+                const float stiffness = membraneStiffness.load();
+                const float decayControl = membraneDecay.load();
+                const float velocitySense = membraneVelocity.load();
+                const float modeledVelocity = juce::jlimit(0.0f, 1.0f,
+                    hitVelocity * (1.0f - velocitySense) + velocity * velocitySense);
+                // Two stable resonant modes approximate the head's fundamental and a stiffened upper mode.
+                const float f0 = 105.0f + 185.0f * tension + 35.0f * modeledVelocity;
+                const float f1 = juce::jmin(0.42f * sr, f0 * (2.05f + 1.25f * stiffness));
+                const float radius = 0.94f + 0.057f * decayControl;
+                const float drive = raw - membranePrev[fc];
+                membranePrev[fc] = raw;
+                const float w0 = 2.0f * juce::MathConstants<float>::pi * f0 / sr;
+                const float w1 = 2.0f * juce::MathConstants<float>::pi * f1 / sr;
+                const float mode0 = drive * (0.025f + 0.11f * modeledVelocity)
+                    + 2.0f * radius * std::cos(w0) * membraneY1[fc]
+                    - radius * radius * membraneY2[fc];
+                membraneY2[fc] = membraneY1[fc];
+                membraneY1[fc] = juce::jlimit(-4.0f, 4.0f, mode0);
+                const float upperRadius = radius * (0.965f - 0.025f * stiffness);
+                const float mode1 = drive * (0.008f + 0.025f * stiffness * modeledVelocity)
+                    + 2.0f * upperRadius * std::cos(w1) * membraneY2[fc]
+                    - upperRadius * upperRadius * membranePrev[fc] * 0.0f;
+                // Keep upper mode state separate by using a bounded, lightly coupled component.
+                membrane = membraneY1[fc] * 0.18f + mode1 * 0.025f;
+            }
+            out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire + membrane));
         }
         playbackPosition += playbackRate;
     }
