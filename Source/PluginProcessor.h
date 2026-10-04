@@ -27,6 +27,8 @@ public:
     double sampleRateOfFile() const { return sourceRate; }
     void setBodyMix(float value) { bodyMix.store(juce::jlimit(0.0f, 1.0f, value)); }
     float getBodyMix() const { return bodyMix.load(); }
+    void setSnareNoiseEnabled(bool enabled) { snareNoiseEnabled.store(enabled); }
+    bool isSnareNoiseEnabled() const { return snareNoiseEnabled.load(); }
 
 private:
     juce::AudioFormatManager formats;
@@ -41,6 +43,9 @@ private:
     float resonatorA1=0.0f, resonatorA2=0.0f;
     float hitVelocity=0.5f;
     std::atomic<float> bodyMix { 0.35f };
+    std::atomic<bool> snareNoiseEnabled { false };
+    uint32_t noiseState = 0x6d2b79f5u;
+    float noiseLowState[2] = { 0.0f, 0.0f };
     juce::CriticalSection sampleLock;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
