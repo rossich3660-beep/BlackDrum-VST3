@@ -32,12 +32,22 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     bodyMixSlider.onValueChange = [this] { processor.setBodyMix((float)bodyMixSlider.getValue()); };
     addAndMakeVisible(bodyMixSlider);
 
-    for (auto* b : { &loadButton, &playButton, &removeButton })
+    for (auto* b : { &loadButton, &playButton, &removeButton, &wireButton })
     {
         addAndMakeVisible(*b);
         b->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292929));
         b->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     }
+
+    wireButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff245a78));
+    wireButton.setClickingTogglesState(true);
+    wireButton.setToggleState(processor.isSnareNoiseEnabled(), juce::dontSendNotification);
+    wireButton.onClick = [this]
+    {
+        const bool enabled = wireButton.getToggleState();
+        processor.setSnareNoiseEnabled(enabled);
+        wireButton.setButtonText(enabled ? "WIRE NOISE: ON" : "WIRE NOISE: OFF");
+    };
 
     loadButton.onClick = [this]
     {
@@ -172,6 +182,7 @@ void BlackDrumAudioProcessorEditor::resized()
     filename.setBounds(45, 260, getWidth() - 90, 25);
     bodyMixLabel.setBounds(420, 28, 120, 22);
     bodyMixSlider.setBounds(445, 45, 75, 75);
+    wireButton.setBounds(410, 125, 145, 30);
     loadButton.setBounds(65, 325, 150, 38);
     playButton.setBounds(235, 325, 150, 38);
     removeButton.setBounds(405, 325, 150, 38);
