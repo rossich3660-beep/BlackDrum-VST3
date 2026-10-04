@@ -35,6 +35,8 @@ public:
     float getTransient() const { return transientAmount.load(); }
     void setSustain(float v) { sustainAmount.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getSustain() const { return sustainAmount.load(); }
+    void setDynamicResponse(float v) { dynamicResponse.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getDynamicResponse() const { return dynamicResponse.load(); }
 
 private:
     juce::AudioFormatManager formats;
@@ -57,6 +59,7 @@ private:
     std::atomic<float> spectralMix { 0.0f };
     std::atomic<float> transientAmount { 0.5f };
     std::atomic<float> sustainAmount { 0.5f };
+    std::atomic<float> dynamicResponse { 0.5f };
     float spectralLow[2] = { 0.0f, 0.0f };
     float spectralPrev[2] = { 0.0f, 0.0f };
     uint32_t noiseState = 0x6d2b79f5u;
