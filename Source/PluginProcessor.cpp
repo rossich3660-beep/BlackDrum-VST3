@@ -108,8 +108,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         const float elapsed = (float)(playbackPosition / juce::jmax(1.0, sourceRate * 0.035));
         const float velocity = hitVelocity;
         // A short velocity-scaled transient lift; decays smoothly over the first ~35 ms.
-        const float attackAmount = (0.04f + 0.24f * velocity) * hitAttackVariation;
-        const float transient = 1.0f + attackAmount * std::exp(-elapsed * 3.2f);
+        const float attackControl = (transientAmount.load() - 0.5f) * 1.4f;
+        const float sustainControl = (sustainAmount.load() - 0.5f) * 1.2f;
+        const float attackAmount = (0.04f + 0.24f * velocity + attackControl * 0.20f) * hitAttackVariation;
+        const float transient = juce::jmax(0.05f, 1.0f + attackAmount * std::exp(-elapsed * 3.2f));
+        const float tailShape = juce::jlimit(0.35f, 1.8f, 1.0f + sustainControl * (1.0f - std::exp(-elapsed * 2.5f)));
         // Harder strikes excite slightly more modeled body, kept deliberately subtle.
         const float resonanceMix = juce::jlimit(0.0f, 1.0f, bodyMix.load() * hitResonanceVariation);
 
@@ -130,7 +133,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
 
             const float blended = raw * (1.0f - resonanceMix) + body * resonanceMix;
             const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity))
-                                           * voiceGain * transient * 1.10f);
+                                           * voiceGain * transient * tailShape * 1.10f);
 
             // Lightweight spectral resynthesis-inspired layer: split the source into
             // low tonal body, high-frequency residual and transient difference.
@@ -163,7 +166,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 const float excitation = (0.012f + 0.095f * velocity) * decay * wireAmount * hitNoiseVariation;
                 wire = bandNoise * excitation;
             }
-            out.setSample(ch, i, std::tanh(spectralOut + wire));
+            out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire));
         }
         playbackPosition += playbackRate;
     }
