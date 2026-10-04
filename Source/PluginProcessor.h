@@ -31,6 +31,10 @@ public:
     float getWireNoiseMix() const { return wireNoiseMix.load(); }
     void setSpectralMix(float value) { spectralMix.store(juce::jlimit(0.0f, 1.0f, value)); }
     float getSpectralMix() const { return spectralMix.load(); }
+    void setTransient(float v) { transientAmount.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getTransient() const { return transientAmount.load(); }
+    void setSustain(float v) { sustainAmount.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getSustain() const { return sustainAmount.load(); }
 
 private:
     juce::AudioFormatManager formats;
@@ -51,6 +55,8 @@ private:
     float hitResonanceVariation = 1.0f;
     float hitNoiseVariation = 1.0f;
     std::atomic<float> spectralMix { 0.0f };
+    std::atomic<float> transientAmount { 0.5f };
+    std::atomic<float> sustainAmount { 0.5f };
     float spectralLow[2] = { 0.0f, 0.0f };
     float spectralPrev[2] = { 0.0f, 0.0f };
     uint32_t noiseState = 0x6d2b79f5u;
