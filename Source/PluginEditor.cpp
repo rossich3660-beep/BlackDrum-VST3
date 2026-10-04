@@ -19,6 +19,18 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     hint.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
     addAndMakeVisible(hint);
 
+    voiceCountLabel.setText("VOICES", juce::dontSendNotification);
+    voiceCountLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    voiceCountLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(voiceCountLabel);
+    voiceCountSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    voiceCountSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 38, 20);
+    voiceCountSlider.setRange(1, 16, 1);
+    voiceCountSlider.setValue(processor.getVoiceCount(), juce::dontSendNotification);
+    voiceCountSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xff66bbff));
+    voiceCountSlider.onValueChange = [this] { processor.setVoiceCount((int)voiceCountSlider.getValue()); };
+    addAndMakeVisible(voiceCountSlider);
+
     bodyMixLabel.setText("BODY MIX", juce::dontSendNotification);
     bodyMixLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     bodyMixLabel.setJustificationType(juce::Justification::centred);
@@ -242,6 +254,8 @@ void BlackDrumAudioProcessorEditor::resized()
     placeMem(decayLabel, decaySlider, 2);
     placeMem(velocityLabel, velocitySlider, 3);
 
+    voiceCountLabel.setBounds(470, 250, 100, 24);
+    voiceCountSlider.setBounds(570, 250, 180, 24);
     hint.setBounds(margin, 300, getWidth() - 2 * margin, 24);
     filename.setBounds(margin, 326, getWidth() - 2 * margin, 24);
     loadButton.setBounds(120, 390, 170, 36);
