@@ -32,6 +32,18 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     bodyMixSlider.onValueChange = [this] { processor.setBodyMix((float)bodyMixSlider.getValue()); };
     addAndMakeVisible(bodyMixSlider);
 
+    spectralLabel.setText("SPECTRAL MIX", juce::dontSendNotification);
+    spectralLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    spectralLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(spectralLabel);
+    spectralSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    spectralSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    spectralSlider.setRange(0.0, 1.0, 0.01);
+    spectralSlider.setValue(processor.getSpectralMix(), juce::dontSendNotification);
+    spectralSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    spectralSlider.onValueChange = [this] { processor.setSpectralMix((float)spectralSlider.getValue()); };
+    addAndMakeVisible(spectralSlider);
+
     for (auto* b : { &loadButton, &playButton, &removeButton, &wireButton })
     {
         addAndMakeVisible(*b);
@@ -182,6 +194,8 @@ void BlackDrumAudioProcessorEditor::resized()
     filename.setBounds(45, 260, getWidth() - 90, 25);
     bodyMixLabel.setBounds(420, 28, 120, 22);
     bodyMixSlider.setBounds(445, 45, 75, 75);
+    spectralLabel.setBounds(285, 28, 120, 22);
+    spectralSlider.setBounds(308, 45, 75, 75);
     wireButton.setBounds(410, 125, 145, 30);
     loadButton.setBounds(65, 325, 150, 38);
     playButton.setBounds(235, 325, 150, 38);
