@@ -296,9 +296,6 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         // Harder strikes excite slightly more modeled body, kept deliberately subtle.
         const float resonanceMix = juce::jlimit(0.0f, 1.0f, bodyMix.load() * hitResonanceVariation);
 
-        const float phaseVocoder = processPhaseVocoder(
-            raw, phaseVocoderMix.load(), juce::jlimit(0.0f, 1.0f, hitVelocity));
-
         for (int ch = 0; ch < out.getNumChannels(); ++ch)
         {
             const int sc = juce::jmin(ch, sample.getNumChannels() - 1);
@@ -478,7 +475,12 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 if (layerLimit > 1)
                     membrane *= 1.0f / std::sqrt((float)layerLimit);
             }
-            out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire + membrane + phaseVocoder * phaseAmount * 0.85f));
+            const float phaseVocoder = processPhaseVocoder(
+                spectralOut, phaseVocoderMix.load(),
+                juce::jlimit(0.0f, 1.0f, hitVelocity));
+            out.setSample(ch, i, std::tanh(
+                spectralOut * tailShape + wire + membrane
+                + phaseVocoder * phaseVocoderMix.load() * 0.85f));
         }
         const int activeLimit = juce::jlimit(1, 16, voiceCount.load());
         for (int vi = 0; vi < activeLimit; ++vi)
