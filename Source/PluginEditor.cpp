@@ -3,10 +3,10 @@
 BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(900, 570);
-    title.setText("BLACKDRUM", juce::dontSendNotification);
-    title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
-    title.setColour(juce::Label::textColourId, juce::Colours::white);
+    setSize(1100, 700);
+    title.setText("BlackSnare", juce::dontSendNotification);
+    title.setFont(juce::Font(juce::FontOptions(42.0f, juce::Font::bold)));
+    title.setColour(juce::Label::textColourId, juce::Colour(0xffe7f4fb));
     addAndMakeVisible(title);
 
     filename.setText("No sample loaded", juce::dontSendNotification);
@@ -52,7 +52,6 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     spectralSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     spectralSlider.setRange(0.0, 1.0, 0.01);
     spectralSlider.setValue(processor.getSpectralMix(), juce::dontSendNotification);
-    phaseVocoderSlider.setValue(processor.getPhaseVocoderMix(), juce::dontSendNotification);
     spectralSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
     spectralSlider.onValueChange = [this] { processor.setSpectralMix((float)spectralSlider.getValue()); };
     addAndMakeVisible(spectralSlider);
@@ -324,12 +323,99 @@ void BlackDrumAudioProcessorEditor::filesDropped(const juce::StringArray& files,
 
 void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    // Keep drawing intentionally simple: fewer custom graphics means fewer UI-specific build risks.
-    g.fillAll(juce::Colour(0xff202326));
-    g.setColour(juce::Colour(0xff353a3e));
-    g.drawRect(getLocalBounds().reduced(8), 1);
+    const auto bounds = getLocalBounds();
+    g.fillAll(juce::Colour(0xff071118));
+    g.setColour(juce::Colour(0xff0d2430));
+    for (int y = 8; y < getHeight(); y += 32) g.drawHorizontalLine(y, 8.0f, (float)getWidth() - 8.0f);
+    for (int x = 8; x < getWidth(); x += 32) g.drawVerticalLine(x, 8.0f, (float)getHeight() - 8.0f);
+    g.setColour(juce::Colour(0xff1d5b78));
+    g.drawRoundedRectangle(bounds.toFloat().reduced(7.0f), 10.0f, 1.2f);
+
+    g.setColour(juce::Colour(0xff8bd7ff));
+    g.drawLine(42.0f, 102.0f, 1058.0f, 102.0f, 1.0f);
+    g.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::plain)));
+    g.drawText("PHYSICAL MODELING SNARE DRUM", 555, 42, 430, 24, juce::Justification::left);
+    g.drawText("ONE SHOT  •  RESYNTHESIS  •  MORPHING", 555, 68, 430, 20, juce::Justification::left);
+
+    // Simple blueprint drum sketches; vector-only to keep the editor stable.
+    g.setColour(juce::Colour(0xff6fa6ba).withAlpha(0.58f));
+    g.drawEllipse(25.0f, 28.0f, 150.0f, 52.0f, 1.2f);
+    g.drawEllipse(25.0f, 82.0f, 150.0f, 52.0f, 1.2f);
+    for (int i = 0; i < 8; ++i)
+    {
+        const float x = 34.0f + i * 18.0f;
+        g.drawLine(x, 40.0f, x, 122.0f, 0.8f);
+    }
+    g.drawEllipse(925.0f, 28.0f, 150.0f, 52.0f, 1.2f);
+    g.drawEllipse(925.0f, 82.0f, 150.0f, 52.0f, 1.2f);
+    g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::plain)));
+    g.drawText("SNARE DRUM", 925, 14, 150, 16, juce::Justification::centred);
+
+    auto panel = juce::Rectangle<float>(28.0f, 116.0f, 1044.0f, 430.0f);
+    g.setColour(juce::Colour(0xff081820).withAlpha(0.96f));
+    g.fillRoundedRectangle(panel, 18.0f);
+    g.setColour(juce::Colour(0xff2b8bb4));
+    g.drawRoundedRectangle(panel, 18.0f, 1.2f);
+    g.setColour(juce::Colour(0xff6fc8eb));
+    g.setFont(juce::Font(juce::FontOptions(15.0f, juce::Font::bold)));
+    g.drawText("PHYSICAL LAYERS", 48, 130, 250, 24, juce::Justification::left);
+    g.drawText("MEMBRANE MODELING", 570, 130, 300, 24, juce::Justification::left);
+    g.drawLine(48.0f, 158.0f, 548.0f, 158.0f, 1.0f);
+    g.drawLine(570.0f, 158.0f, 1048.0f, 158.0f, 1.0f);
+    g.setColour(juce::Colour(0xff25424e));
+    g.drawLine(555.0f, 130.0f, 555.0f, 535.0f, 1.0f);
+    g.drawLine(48.0f, 370.0f, 1048.0f, 370.0f, 1.0f);
+    g.drawLine(48.0f, 468.0f, 1048.0f, 468.0f, 1.0f);
+    g.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::italic)));
+    g.drawText("Real Drums", 35, 570, 150, 22, juce::Justification::left);
+    g.drawText("Real Feel", 48, 592, 150, 22, juce::Justification::left);
 }
 void BlackDrumAudioProcessorEditor::resized()
+{
+    const int knob = 70;
+    auto knobPlace = [&](juce::Label& label, juce::Slider& slider, int x, int y, int w)
+    {
+        label.setBounds(x, y, w, 22);
+        slider.setBounds(x + (w - knob) / 2, y + 24, knob, knob);
+    };
+
+    title.setBounds(195, 24, 430, 58);
+    hint.setBounds(170, 550, 760, 22);
+    filename.setBounds(170, 574, 760, 22);
+
+    knobPlace(bodyMixLabel, bodyMixSlider, 48, 176, 108);
+    knobPlace(spectralLabel, spectralSlider, 165, 176, 108);
+    knobPlace(wireLabel, wireSlider, 282, 176, 108);
+    knobPlace(phaseVocoderLabel, phaseVocoderSlider, 399, 176, 108);
+
+    knobPlace(attackLabel, attackSlider, 48, 276, 108);
+    knobPlace(sustainLabel, sustainSlider, 165, 276, 108);
+    knobPlace(dynamicLabel, dynamicSlider, 282, 276, 108);
+
+    membraneTitle.setBounds(570, 130, 300, 24);
+    membraneToggle.setBounds(570, 168, 220, 24);
+    knobPlace(tensionLabel, tensionSlider, 570, 212, 108);
+    knobPlace(stiffnessLabel, stiffnessSlider, 687, 212, 108);
+    knobPlace(decayLabel, decaySlider, 804, 212, 108);
+    knobPlace(velocityLabel, velocitySlider, 921, 212, 108);
+
+    voiceCountLabel.setBounds(570, 320, 90, 24);
+    voiceCountSlider.setBounds(665, 320, 250, 24);
+
+    // Lower physical layer controls.
+    knobPlace(shellLabel, shellSlider, 210, 384, 150);
+    knobPlace(wireLabel, wireSlider, 480, 384, 150);
+    knobPlace(phaseVocoderLabel, phaseVocoderSlider, 750, 384, 150);
+    shellLabel.setText("SHELL RESONANCE", juce::dontSendNotification);
+    wireLabel.setText("SNARE / WIRE", juce::dontSendNotification);
+    phaseVocoderLabel.setText("PHASE VOCODER", juce::dontSendNotification);
+
+    loadButton.setBounds(210, 610, 210, 38);
+    playButton.setBounds(445, 610, 210, 38);
+    removeButton.setBounds(680, 610, 210, 38);
+    savePresetButton.setBounds(320, 655, 210, 36);
+    loadPresetButton.setBounds(570, 655, 210, 36);
+}
 {
     const int margin = 20;
     title.setBounds(margin, 12, 240, 36);
