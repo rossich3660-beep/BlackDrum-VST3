@@ -49,6 +49,8 @@ public:
     float getMembraneDecay() const { return membraneDecay.load(); }
     void setMembraneVelocity(float v) { membraneVelocity.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getMembraneVelocity() const { return membraneVelocity.load(); }
+    juce::ValueTree createPresetState() const;
+    bool applyPresetState(const juce::ValueTree&);
 
 private:
     juce::AudioFormatManager formats;
@@ -86,5 +88,7 @@ private:
     uint32_t noiseState = 0x6d2b79f5u;
     float noiseLowState[2] = { 0.0f, 0.0f };
     juce::CriticalSection sampleLock;
+    juce::ValueTree makeStateTree() const;
+    bool restoreStateTree(const juce::ValueTree&);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
