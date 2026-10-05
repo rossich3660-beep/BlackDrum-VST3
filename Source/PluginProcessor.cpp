@@ -222,6 +222,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const int voiceLimitForLayers = juce::jlimit(1, 16, voiceCount.load());
             if (wireAmount > 0.0001f)
             {
+                // Three short resonant wire modes. Each voice has independent
+                // state, so repeated hits do not share an identical wire tail.
+                const float wireFreqs[3] = { 1650.0f, 2850.0f, 4300.0f };
+                const float wireRadii[3] = { 0.935f, 0.915f, 0.885f };
+
                 for (int vi = 0; vi < voiceLimitForLayers; ++vi)
                 {
                     auto& vce = voices[(size_t)vi];
@@ -234,12 +239,44 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                     const float white = ((float)(vce.noiseSeed & 0x00ffffffu) / 8388607.5f) - 1.0f;
                     vce.noiseLow[fc] += 0.22f * (white - vce.noiseLow[fc]);
                     const float bandNoise = white - vce.noiseLow[fc];
-                    const float voiceElapsed = (float)(vce.position / juce::jmax(1.0, sourceRate * 0.035));
-                    const float decay = std::exp(-(float)vce.position / (float)(sourceRate * (0.10f + 0.12f * vce.velocity)));
-                    const float excitation = (0.012f + 0.095f * std::pow(vce.velocity, 1.1f))
+
+                    const int vi0 = (int)vce.position;
+                    const int vi1 = juce::jmin(vi0 + 1, sample.getNumSamples() - 1);
+                    const float vf = (float)(vce.position - vi0);
+                    const float voiceRaw = sample.getSample(sc, vi0)
+                        + (sample.getSample(sc, vi1) - sample.getSample(sc, vi0)) * vf;
+                    const float impact = voiceRaw - vce.wirePrev[fc];
+                    vce.wirePrev[fc] = voiceRaw;
+
+                    const float decay = std::exp(-(float)vce.position
+                        / (float)(sourceRate * (0.075f + 0.10f * vce.velocity)));
+                    const float excitation = (0.010f + 0.090f * std::pow(vce.velocity, 1.15f))
                         * decay * wireAmount * hitNoiseVariation;
-                    wire += bandNoise * excitation;
+                    float voiceWire = bandNoise * excitation;
+
+                    for (int mode = 0; mode < 3; ++mode)
+                    {
+                        const float freq = juce::jmin(
+                            wireFreqs[mode] * (0.96f + 0.08f * vce.velocity), 0.40f * sr);
+                        const float w = 2.0f * juce::MathConstants<float>::pi * freq / sr;
+                        const float r = juce::jlimit(0.80f, 0.97f,
+                            wireRadii[mode] + 0.018f * vce.velocity);
+                        const float drive = std::tanh(
+                            impact * (0.35f + 1.15f * vce.velocity)
+                            * (1.0f + 0.5f * hitResonanceVariation));
+                        const float y = drive * (0.010f + 0.018f * vce.velocity)
+                            + 2.0f * r * std::cos(w) * vce.wireY1[mode][fc]
+                            - r * r * vce.wireY2[mode][fc];
+                        vce.wireY2[mode][fc] = vce.wireY1[mode][fc];
+                        vce.wireY1[mode][fc] = juce::jlimit(-1.5f, 1.5f, y);
+                        voiceWire += vce.wireY1[mode][fc]
+                            * (0.020f + 0.035f * vce.velocity)
+                            * std::exp(-(float)vce.position
+                                / (float)(sourceRate * (0.11f + 0.10f * vce.velocity)));
+                    }
+                    wire += voiceWire;
                 }
+
                 if (voiceLimitForLayers > 1)
                     wire *= 1.0f / std::sqrt((float)voiceLimitForLayers);
             }
