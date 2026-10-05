@@ -56,7 +56,21 @@ private:
     juce::AudioFormatManager formats;
     juce::AudioBuffer<float> sample;
     juce::File loadedFile;
-    struct Voice { double position = -1.0; float velocity = 0.5f; uint64_t age = 0; };
+    struct Voice
+    {
+        double position = -1.0;
+        float velocity = 0.5f;
+        uint64_t age = 0;
+        float phaseMod0 = 0.0f;
+        float phaseMod1 = 0.0f;
+        uint32_t noiseSeed = 0x6d2b79f5u;
+        float membraneY1[2] = { 0.0f, 0.0f };
+        float membraneY2[2] = { 0.0f, 0.0f };
+        float membraneUpperY1[2] = { 0.0f, 0.0f };
+        float membraneUpperY2[2] = { 0.0f, 0.0f };
+        float membranePrev[2] = { 0.0f, 0.0f };
+        float noiseLow[2] = { 0.0f, 0.0f };
+    };
     std::array<Voice, 16> voices{};
     std::atomic<int> voiceCount { 8 };
     uint64_t voiceAge = 0;
