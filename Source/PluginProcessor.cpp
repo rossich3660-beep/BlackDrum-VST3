@@ -252,16 +252,82 @@ juce::AudioProcessorEditor* BlackDrumAudioProcessor::createEditor()
     return new BlackDrumAudioProcessorEditor(*this);
 }
 
+juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
+{
+    juce::ValueTree state("BlackDrumState");
+    state.setProperty("version", 2, nullptr);
+    state.setProperty("samplePath", loadedFile.getFullPathName(), nullptr);
+    state.setProperty("voiceCount", getVoiceCount(), nullptr);
+    state.setProperty("bodyMix", getBodyMix(), nullptr);
+    state.setProperty("wireNoiseMix", getWireNoiseMix(), nullptr);
+    state.setProperty("spectralMix", getSpectralMix(), nullptr);
+    state.setProperty("transient", getTransient(), nullptr);
+    state.setProperty("sustain", getSustain(), nullptr);
+    state.setProperty("dynamicResponse", getDynamicResponse(), nullptr);
+    state.setProperty("membraneEnabled", getMembraneEnabled(), nullptr);
+    state.setProperty("membraneTension", getMembraneTension(), nullptr);
+    state.setProperty("membraneStiffness", getMembraneStiffness(), nullptr);
+    state.setProperty("membraneDecay", getMembraneDecay(), nullptr);
+    state.setProperty("membraneVelocity", getMembraneVelocity(), nullptr);
+    return state;
+}
+
+juce::ValueTree BlackDrumAudioProcessor::createPresetState() const
+{
+    return makeStateTree();
+}
+
+bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
+{
+    if (!state.isValid() || state.getType() != juce::Identifier("BlackDrumState"))
+        return false;
+
+    setVoiceCount((int) state.getProperty("voiceCount", getVoiceCount()));
+    setBodyMix((float) state.getProperty("bodyMix", getBodyMix()));
+    setWireNoiseMix((float) state.getProperty("wireNoiseMix", getWireNoiseMix()));
+    setSpectralMix((float) state.getProperty("spectralMix", getSpectralMix()));
+    setTransient((float) state.getProperty("transient", getTransient()));
+    setSustain((float) state.getProperty("sustain", getSustain()));
+    setDynamicResponse((float) state.getProperty("dynamicResponse", getDynamicResponse()));
+    setMembraneEnabled((bool) state.getProperty("membraneEnabled", getMembraneEnabled()));
+    setMembraneTension((float) state.getProperty("membraneTension", getMembraneTension()));
+    setMembraneStiffness((float) state.getProperty("membraneStiffness", getMembraneStiffness()));
+    setMembraneDecay((float) state.getProperty("membraneDecay", getMembraneDecay()));
+    setMembraneVelocity((float) state.getProperty("membraneVelocity", getMembraneVelocity()));
+
+    const auto path = state.getProperty("samplePath").toString();
+    if (path.isNotEmpty())
+        loadSample(juce::File(path));
+    return true;
+}
+
+bool BlackDrumAudioProcessor::applyPresetState(const juce::ValueTree& state)
+{
+    return restoreStateTree(state);
+}
+
 void BlackDrumAudioProcessor::getStateInformation(juce::MemoryBlock& d)
 {
-    juce::MemoryOutputStream s(d, true);
-    s.writeString(loadedFile.getFullPathName());
+    const auto state = makeStateTree();
+    if (const auto xml = state.createXml())
+        copyXmlToBinary(*xml, d);
 }
 
 void BlackDrumAudioProcessor::setStateInformation(const void* data, int size)
 {
-    juce::MemoryInputStream s(data, (size_t)size, false);
-    auto p = s.readString();
+    if (data == nullptr || size <= 0)
+        return;
+
+    if (auto xml = getXmlFromBinary(data, size))
+    {
+        const auto state = juce::ValueTree::fromXml(*xml);
+        if (restoreStateTree(state))
+            return;
+    }
+
+    // Backward compatibility with older BlackDrum states that contained only the sample path.
+    juce::MemoryInputStream legacy(data, (size_t) size, false);
+    const auto p = legacy.readString();
     if (p.isNotEmpty())
         loadSample(juce::File(p));
 }
