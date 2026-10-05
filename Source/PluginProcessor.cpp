@@ -298,12 +298,26 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                     const float modeledVelocity = juce::jlimit(0.0f, 1.0f,
                         vce.velocity * (1.0f - velocitySense) + std::pow(vce.velocity, 1.8f - 1.25f * dynamicResponse.load()) * velocitySense);
 
-                    const float f0 = 105.0f + 185.0f * tension + 35.0f * modeledVelocity;
-                    const float f1 = juce::jmin(0.42f * sr, f0 * (2.05f + 1.25f * stiffness));
-                    const float radius = 0.94f + 0.057f * decayControl;
+                    // Nonlinear membrane: displacement and velocity temporarily
+                    // increase effective tension, making hard hits brighter and tighter.
+                    const float displacement = juce::jlimit(0.0f, 1.0f,
+                        std::abs(vce.membraneY1[fc]) * 3.0f);
+                    const float nonlinearTension = juce::jlimit(0.0f, 1.0f,
+                        tension + (0.10f + 0.30f * stiffness) * displacement
+                        + 0.10f * modeledVelocity * displacement);
+                    const float f0 = 105.0f + 185.0f * nonlinearTension
+                        + 35.0f * modeledVelocity;
+                    const float f1 = juce::jmin(0.42f * sr,
+                        f0 * (2.05f + 1.25f * stiffness + 0.22f * displacement));
+                    const float radius = juce::jlimit(0.91f, 0.997f,
+                        0.94f + 0.057f * decayControl
+                        - 0.018f * displacement * modeledVelocity);
                     const float voiceIdxPos = (float)vce.position;
-                    const float drive = raw - vce.membranePrev[fc];
+                    const float rawDrive = raw - vce.membranePrev[fc];
                     vce.membranePrev[fc] = raw;
+                    const float drive = std::tanh(rawDrive
+                        * (1.0f + 1.6f * modeledVelocity
+                        * (0.45f + 0.55f * stiffness)));
 
                     const float w0 = 2.0f * juce::MathConstants<float>::pi * f0 / sr;
                     const float w1 = 2.0f * juce::MathConstants<float>::pi * f1 / sr;
