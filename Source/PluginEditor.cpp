@@ -126,9 +126,14 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     shellSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     shellSlider.setRange(0.0, 1.0, 0.01);
     shellSlider.setValue(processor.getShellResonanceMix(), juce::dontSendNotification);
+    snareWireLayerSlider.setValue(processor.getWireNoiseMix(), juce::dontSendNotification);
+    phaseVocoderLayerSlider.setValue(processor.getPhaseVocoderMix(), juce::dontSendNotification);
     shellSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
     shellSlider.onValueChange = [this] { processor.setShellResonanceMix((float)shellSlider.getValue()); };
     addAndMakeVisible(shellSlider);
+
+    setupKnob(snareWireLayerSlider, snareWireLayerLabel, "SNARE / WIRE", processor.getWireNoiseMix(), [this](float v){ processor.setWireNoiseMix(v); });
+    setupKnob(phaseVocoderLayerSlider, phaseVocoderLayerLabel, "PHASE VOCODER", processor.getPhaseVocoderMix(), [this](float v){ processor.setPhaseVocoderMix(v); });
 
     savePresetButton.onClick = [this]
     {
@@ -404,11 +409,8 @@ void BlackDrumAudioProcessorEditor::resized()
 
     // Lower physical layer controls.
     knobPlace(shellLabel, shellSlider, 210, 384, 150);
-    knobPlace(wireLabel, wireSlider, 480, 384, 150);
-    knobPlace(phaseVocoderLabel, phaseVocoderSlider, 750, 384, 150);
-    shellLabel.setText("SHELL RESONANCE", juce::dontSendNotification);
-    wireLabel.setText("SNARE / WIRE", juce::dontSendNotification);
-    phaseVocoderLabel.setText("PHASE VOCODER", juce::dontSendNotification);
+    knobPlace(snareWireLayerLabel, snareWireLayerSlider, 480, 384, 150);
+    knobPlace(phaseVocoderLayerLabel, phaseVocoderLayerSlider, 750, 384, 150);
 
     loadButton.setBounds(210, 610, 210, 38);
     playButton.setBounds(445, 610, 210, 38);
