@@ -264,6 +264,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                         newVoice.wireY1[mode][vc] = 0.0f;
                         newVoice.wireY2[mode][vc] = 0.0f;
                     }
+                    for (int mode = 0; mode < 6; ++mode)
+                    {
+                        newVoice.shellY1[mode][vc] = 0.0f;
+                        newVoice.shellY2[mode][vc] = 0.0f;
+                    }
                 }
                 newVoice.age = voiceAge;
                 playbackPosition = 0.0;
@@ -475,12 +480,53 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 if (layerLimit > 1)
                     membrane *= 1.0f / std::sqrt((float)layerLimit);
             }
+            float shell = 0.0f;
+            const float shellAmount = shellResonanceMix.load();
+            if (shellAmount > 0.0001f)
+            {
+                // A separate damped shell/body resonator: low, mid and upper modes.
+                // Its excitation and modal gain increase with MIDI velocity, while
+                // a small membrane coupling makes the body follow membrane motion.
+                const float shellFreqs[6] = { 120.0f, 205.0f, 315.0f, 510.0f, 860.0f, 1450.0f };
+                const float shellRadii[6] = { 0.982f, 0.976f, 0.970f, 0.958f, 0.944f, 0.925f };
+                const float shellGains[6] = { 0.060f, 0.045f, 0.038f, 0.030f, 0.022f, 0.014f };
+                const int shellLimit = juce::jlimit(1, 16, voiceCount.load());
+                for (int vi = 0; vi < shellLimit; ++vi)
+                {
+                    auto& vce = voices[(size_t) vi];
+                    if (vce.position < 0.0 || vce.position >= sample.getNumSamples()) continue;
+                    const float shellVelocity = juce::jlimit(0.0f, 1.0f, vce.velocity);
+                    const int si0 = (int) vce.position;
+                    const int si1 = juce::jmin(si0 + 1, sample.getNumSamples() - 1);
+                    const float sf = (float) (vce.position - si0);
+                    const float shellRaw = sample.getSample(sc, si0)
+                        + (sample.getSample(sc, si1) - sample.getSample(sc, si0)) * sf;
+                    const float impact = shellRaw + membrane * (0.35f + 0.85f * shellVelocity);
+                    for (int mode = 0; mode < 6; ++mode)
+                    {
+                        const float freq = juce::jmin(shellFreqs[mode] * (0.985f + 0.035f * shellVelocity), 0.40f * sr);
+                        const float w = 2.0f * juce::MathConstants<float>::pi * freq / sr;
+                        const float radius = juce::jlimit(0.82f, 0.993f, shellRadii[mode] + 0.010f * shellVelocity);
+                        const float drive = std::tanh(impact * (0.45f + 1.35f * shellVelocity));
+                        const float y = drive * shellGains[mode] * (0.45f + 0.90f * shellVelocity)
+                            + 2.0f * radius * std::cos(w) * vce.shellY1[mode][fc]
+                            - radius * radius * vce.shellY2[mode][fc];
+                        vce.shellY2[mode][fc] = vce.shellY1[mode][fc];
+                        vce.shellY1[mode][fc] = juce::jlimit(-2.0f, 2.0f, y);
+                        shell += vce.shellY1[mode][fc]
+                            * std::exp(-(float) vce.position / (float) (sourceRate * (0.16f + 0.18f * shellVelocity)));
+                    }
+                }
+                if (shellLimit > 1) shell *= 1.0f / std::sqrt((float) shellLimit);
+                shell *= shellAmount;
+            }
+
             const float phaseVocoder = processPhaseVocoder(
                 spectralOut, phaseVocoderMix.load(),
                 juce::jlimit(0.0f, 1.0f, hitVelocity));
             out.setSample(ch, i, std::tanh(
                 spectralOut * tailShape + wire + membrane
-                + phaseVocoder * phaseVocoderMix.load() * 0.85f));
+                + phaseVocoder * phaseVocoderMix.load() * 0.85f + shell));
         }
         const int activeLimit = juce::jlimit(1, 16, voiceCount.load());
         for (int vi = 0; vi < activeLimit; ++vi)
@@ -509,6 +555,7 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("wireNoiseMix", getWireNoiseMix(), nullptr);
     state.setProperty("spectralMix", getSpectralMix(), nullptr);
     state.setProperty("phaseVocoderMix", getPhaseVocoderMix(), nullptr);
+    state.setProperty("shellResonanceMix", getShellResonanceMix(), nullptr);
     state.setProperty("transient", getTransient(), nullptr);
     state.setProperty("sustain", getSustain(), nullptr);
     state.setProperty("dynamicResponse", getDynamicResponse(), nullptr);
@@ -535,6 +582,7 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setWireNoiseMix((float) state.getProperty("wireNoiseMix", getWireNoiseMix()));
     setSpectralMix((float) state.getProperty("spectralMix", getSpectralMix()));
     setPhaseVocoderMix((float) state.getProperty("phaseVocoderMix", getPhaseVocoderMix()));
+    setShellResonanceMix((float) state.getProperty("shellResonanceMix", getShellResonanceMix()));
     setTransient((float) state.getProperty("transient", getTransient()));
     setSustain((float) state.getProperty("sustain", getSustain()));
     setDynamicResponse((float) state.getProperty("dynamicResponse", getDynamicResponse()));
