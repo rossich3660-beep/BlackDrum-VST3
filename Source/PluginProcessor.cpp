@@ -296,6 +296,9 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         // Harder strikes excite slightly more modeled body, kept deliberately subtle.
         const float resonanceMix = juce::jlimit(0.0f, 1.0f, bodyMix.load() * hitResonanceVariation);
 
+        const float phaseVocoder = processPhaseVocoder(
+            raw, phaseVocoderMix.load(), juce::jlimit(0.0f, 1.0f, hitVelocity));
+
         for (int ch = 0; ch < out.getNumChannels(); ++ch)
         {
             const int sc = juce::jmin(ch, sample.getNumChannels() - 1);
@@ -331,7 +334,6 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             // Lightweight spectral resynthesis-inspired layer: split the source into
             // low tonal body, high-frequency residual and transient difference.
             const float specAmount = spectralMix.load();
-            const float phaseAmount = phaseVocoderMix.load();
             spectralLow[fc] += 0.075f * (raw - spectralLow[fc]);
             const float tonal = spectralLow[fc];
             const float residual = raw - tonal;
@@ -343,11 +345,6 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 + transientPart * transientEnv * (0.10f + 0.20f * velocity);
             const float spectralOut = shaped * (1.0f - specAmount)
                 + std::tanh(spectralLayer * voiceGain * transient * 1.10f) * specAmount;
-            // The phase-vocoder layer is intentionally auxiliary: transients and
-            // the direct sample stay immediate, while the STFT morph supplies the
-            // controllable spectral movement behind them.
-            const float phaseVocoder = processPhaseVocoder(
-                spectralOut, phaseAmount, juce::jlimit(0.0f, 1.0f, hitVelocity));
 
             // Each active voice gets its own noise stream and phase. This prevents
             // repeated MIDI hits from sharing an identical noise waveform.
@@ -503,7 +500,7 @@ juce::AudioProcessorEditor* BlackDrumAudioProcessor::createEditor()
 juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
 {
     juce::ValueTree state("BlackDrumState");
-    state.setProperty("version", 2, nullptr);
+    state.setProperty("version", 3, nullptr);
     state.setProperty("samplePath", loadedFile.getFullPathName(), nullptr);
     state.setProperty("voiceCount", getVoiceCount(), nullptr);
     state.setProperty("bodyMix", getBodyMix(), nullptr);
