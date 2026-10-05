@@ -87,7 +87,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     setupKnob(decaySlider, decayLabel, "DECAY", processor.getMembraneDecay(), [this](float v){ processor.setMembraneDecay(v); });
     setupKnob(velocitySlider, velocityLabel, "VELOCITY SENS", processor.getMembraneVelocity(), [this](float v){ processor.setMembraneVelocity(v); });
 
-    for (auto* b : { &loadButton, &playButton, &removeButton })
+    for (auto* b : { &loadButton, &playButton, &removeButton, &savePresetButton, &loadPresetButton })
     {
         addAndMakeVisible(*b);
         b->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292929));
@@ -105,6 +105,48 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     wireSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
     wireSlider.onValueChange = [this] { processor.setWireNoiseMix((float)wireSlider.getValue()); };
     addAndMakeVisible(wireSlider);
+
+    savePresetButton.onClick = [this]
+    {
+        if (presetChooser != nullptr)
+            return;
+        presetChooser = std::make_unique<juce::FileChooser>(
+            "Save BlackDrum preset", juce::File{}, "*.blackdrum");
+        juce::Component::SafePointer<BlackDrumAudioProcessorEditor> safeThis(this);
+        presetChooser->launchAsync(
+            juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+            [safeThis](const juce::FileChooser& chooser)
+            {
+                if (safeThis == nullptr) return;
+                auto file = chooser.getResult();
+                safeThis->presetChooser.reset();
+                if (file != juce::File{})
+                {
+                    if (!file.hasFileExtension(".blackdrum"))
+                        file = file.withFileExtension(".blackdrum");
+                    safeThis->savePresetTo(file);
+                }
+            });
+    };
+
+    loadPresetButton.onClick = [this]
+    {
+        if (presetChooser != nullptr)
+            return;
+        presetChooser = std::make_unique<juce::FileChooser>(
+            "Load BlackDrum preset", juce::File{}, "*.blackdrum");
+        juce::Component::SafePointer<BlackDrumAudioProcessorEditor> safeThis(this);
+        presetChooser->launchAsync(
+            juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+            [safeThis](const juce::FileChooser& chooser)
+            {
+                if (safeThis == nullptr) return;
+                const auto file = chooser.getResult();
+                safeThis->presetChooser.reset();
+                if (file.existsAsFile())
+                    safeThis->loadPresetFrom(file);
+            });
+    };
 
     loadButton.onClick = [this]
     {
@@ -143,6 +185,52 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
         hint.setText("Sample remains loaded until another sample is selected", juce::dontSendNotification);
         filename.setText("No sample loaded", juce::dontSendNotification);
     };
+}
+
+void BlackDrumAudioProcessorEditor::savePresetTo(const juce::File& file)
+{
+    const auto state = processor.createPresetState();
+    if (auto xml = state.createXml())
+    {
+        xml->setAttribute("presetName", file.getFileNameWithoutExtension());
+        if (file.replaceWithText(xml->toString()))
+            hint.setText("Preset saved: " + file.getFileName(), juce::dontSendNotification);
+        else
+            hint.setText("Could not save preset", juce::dontSendNotification);
+    }
+}
+
+void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
+{
+    const auto xml = juce::parseXML(file);
+    if (xml == nullptr)
+    {
+        hint.setText("Invalid BlackDrum preset", juce::dontSendNotification);
+        return;
+    }
+
+    const auto state = juce::ValueTree::fromXml(*xml);
+    if (!processor.applyPresetState(state))
+    {
+        hint.setText("Invalid BlackDrum preset", juce::dontSendNotification);
+        return;
+    }
+
+    filename.setText(processor.sampleName().isNotEmpty() ? processor.sampleName() : "No sample loaded",
+                     juce::dontSendNotification);
+    voiceCountSlider.setValue(processor.getVoiceCount(), juce::dontSendNotification);
+    bodyMixSlider.setValue(processor.getBodyMix(), juce::dontSendNotification);
+    spectralSlider.setValue(processor.getSpectralMix(), juce::dontSendNotification);
+    wireSlider.setValue(processor.getWireNoiseMix(), juce::dontSendNotification);
+    attackSlider.setValue(processor.getTransient(), juce::dontSendNotification);
+    sustainSlider.setValue(processor.getSustain(), juce::dontSendNotification);
+    dynamicSlider.setValue(processor.getDynamicResponse(), juce::dontSendNotification);
+    membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
+    tensionSlider.setValue(processor.getMembraneTension(), juce::dontSendNotification);
+    stiffnessSlider.setValue(processor.getMembraneStiffness(), juce::dontSendNotification);
+    decaySlider.setValue(processor.getMembraneDecay(), juce::dontSendNotification);
+    velocitySlider.setValue(processor.getMembraneVelocity(), juce::dontSendNotification);
+    hint.setText("Preset loaded safely", juce::dontSendNotification);
 }
 
 bool BlackDrumAudioProcessorEditor::isSupportedAudioFile(const juce::File& file) const
@@ -261,4 +349,6 @@ void BlackDrumAudioProcessorEditor::resized()
     loadButton.setBounds(120, 390, 170, 36);
     playButton.setBounds(365, 390, 170, 36);
     removeButton.setBounds(610, 390, 170, 36);
+    savePresetButton.setBounds(190, 455, 220, 36);
+    loadPresetButton.setBounds(490, 455, 220, 36);
 }
