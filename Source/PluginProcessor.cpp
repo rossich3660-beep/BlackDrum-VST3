@@ -130,6 +130,12 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                     newVoice.membraneUpperY2[vc] = std::sin(newVoice.phaseMod1 - 0.17f) * 0.0015f;
                     newVoice.membranePrev[vc] = 0.0f;
                     newVoice.noiseLow[vc] = 0.0f;
+                    newVoice.wirePrev[vc] = 0.0f;
+                    for (int mode = 0; mode < 3; ++mode)
+                    {
+                        newVoice.wireY1[mode][vc] = 0.0f;
+                        newVoice.wireY2[mode][vc] = 0.0f;
+                    }
                 }
                 newVoice.age = voiceAge;
                 playbackPosition = 0.0;
