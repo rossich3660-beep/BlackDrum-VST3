@@ -12,10 +12,14 @@ public:
  void filesDropped(const juce::StringArray&,int,int) override;
 private:
  void loadFrom(const juce::File&);
+ void savePresetTo(const juce::File&);
+ void loadPresetFrom(const juce::File&);
  bool isSupportedAudioFile(const juce::File&) const;
  BlackDrumAudioProcessor& processor;
  std::unique_ptr<juce::FileChooser> fileChooser;
+ std::unique_ptr<juce::FileChooser> presetChooser;
  juce::TextButton loadButton{"LOAD SAMPLE"}, playButton{"PREVIEW"}, removeButton{"REMOVE"};
+ juce::TextButton savePresetButton{"SAVE PRESET"}, loadPresetButton{"LOAD PRESET"};
  juce::Label title, filename, hint, voiceCountLabel, bodyMixLabel, spectralLabel, wireLabel, attackLabel, sustainLabel, dynamicLabel, membraneTitle, tensionLabel, stiffnessLabel, decayLabel, velocityLabel;
  juce::Slider voiceCountSlider, bodyMixSlider, spectralSlider, wireSlider, attackSlider, sustainSlider, dynamicSlider, tensionSlider, stiffnessSlider, decaySlider, velocitySlider;
     juce::ToggleButton membraneToggle { "MEMBRANE MODEL" };
