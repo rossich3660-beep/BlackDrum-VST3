@@ -52,6 +52,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     spectralSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     spectralSlider.setRange(0.0, 1.0, 0.01);
     spectralSlider.setValue(processor.getSpectralMix(), juce::dontSendNotification);
+    phaseVocoderSlider.setValue(processor.getPhaseVocoderMix(), juce::dontSendNotification);
     spectralSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
     spectralSlider.onValueChange = [this] { processor.setSpectralMix((float)spectralSlider.getValue()); };
     addAndMakeVisible(spectralSlider);
@@ -105,6 +106,18 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     wireSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
     wireSlider.onValueChange = [this] { processor.setWireNoiseMix((float)wireSlider.getValue()); };
     addAndMakeVisible(wireSlider);
+
+    phaseVocoderLabel.setText("PHASE MORPH", juce::dontSendNotification);
+    phaseVocoderLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    phaseVocoderLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(phaseVocoderLabel);
+    phaseVocoderSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    phaseVocoderSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    phaseVocoderSlider.setRange(0.0, 1.0, 0.01);
+    phaseVocoderSlider.setValue(processor.getPhaseVocoderMix(), juce::dontSendNotification);
+    phaseVocoderSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    phaseVocoderSlider.onValueChange = [this] { processor.setPhaseVocoderMix((float)phaseVocoderSlider.getValue()); };
+    addAndMakeVisible(phaseVocoderSlider);
 
     savePresetButton.onClick = [this]
     {
@@ -310,7 +323,7 @@ void BlackDrumAudioProcessorEditor::resized()
 
     // Main processing controls: two compact rows, with labels kept separate from knobs.
     const int knobW = 64;
-    const int colW = 135;
+    const int colW = 112;
     const int startX = 24;
     const int row1LabelY = 62, row1KnobY = 82;
     const int row2LabelY = 170, row2KnobY = 190;
@@ -325,6 +338,7 @@ void BlackDrumAudioProcessorEditor::resized()
     place(bodyMixLabel, bodyMixSlider, 0, 0);
     place(spectralLabel, spectralSlider, 1, 0);
     place(wireLabel, wireSlider, 2, 0);
+    place(phaseVocoderLabel, phaseVocoderSlider, 3, 0);
     place(attackLabel, attackSlider, 0, 1);
     place(sustainLabel, sustainSlider, 1, 1);
     place(dynamicLabel, dynamicSlider, 2, 1);
