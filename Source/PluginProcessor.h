@@ -51,6 +51,8 @@ public:
     float getMembraneVelocity() const { return membraneVelocity.load(); }
     void setPhaseVocoderMix(float v) { phaseVocoderMix.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getPhaseVocoderMix() const { return phaseVocoderMix.load(); }
+    void setShellResonanceMix(float v) { shellResonanceMix.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getShellResonanceMix() const { return shellResonanceMix.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
 
@@ -75,6 +77,8 @@ private:
         float wirePrev[2] = { 0.0f, 0.0f };
         float wireY1[3][2] = {};
         float wireY2[3][2] = {};
+        float shellY1[6][2] = {};
+        float shellY2[6][2] = {};
 
     };
     std::array<Voice, 16> voices{};
@@ -98,6 +102,7 @@ private:
     // Phase-vocoder spectral morphing: a deliberately small STFT layer blended
     // with the direct drum signal. It uses fixed-size, allocation-free state.
     std::atomic<float> phaseVocoderMix { 0.0f };
+    std::atomic<float> shellResonanceMix { 0.35f };
     static constexpr int pvFFTSize = 1024;
     static constexpr int pvHopSize = 128;
     static constexpr int pvBins = pvFFTSize / 2 + 1;
