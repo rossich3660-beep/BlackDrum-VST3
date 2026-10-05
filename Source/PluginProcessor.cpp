@@ -57,7 +57,7 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
     ++pvHopCounter;
     ++pvSampleCounter;
 
-    if (pvHopCounter >= pvHopSize)
+    if (pvHopCounter >= pvHopSize && pvSampleCounter >= (uint64_t) pvFFTSize)
     {
         pvHopCounter = 0;
 
@@ -148,7 +148,7 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
     if (pvSampleCounter <= (uint64_t) pvFFTSize)
         return 0.0f;
 
-    const size_t readIndex = (size_t) ((pvSampleCounter - (uint64_t) pvFFTSize) % (uint64_t) pvRingSize);
+    const size_t readIndex = (size_t) ((pvSampleCounter - (uint64_t) pvFFTSize + 1u) % (uint64_t) pvRingSize);
     const float norm = pvNormRing[readIndex];
     const float output = norm > 1.0e-6f ? pvOutputRing[readIndex] / norm : 0.0f;
     pvOutputRing[readIndex] = 0.0f;
