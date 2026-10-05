@@ -73,6 +73,9 @@ private:
         float wirePrev[2] = { 0.0f, 0.0f };
         float wireY1[3][2] = {};
         float wireY2[3][2] = {};
+        float wirePrev[2] = { 0.0f, 0.0f };
+        float wireY1[3][2] = {};
+        float wireY2[3][2] = {};
     };
     std::array<Voice, 16> voices{};
     std::atomic<int> voiceCount { 8 };
