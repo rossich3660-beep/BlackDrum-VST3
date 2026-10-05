@@ -119,6 +119,18 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     phaseVocoderSlider.onValueChange = [this] { processor.setPhaseVocoderMix((float)phaseVocoderSlider.getValue()); };
     addAndMakeVisible(phaseVocoderSlider);
 
+    shellLabel.setText("SHELL RESONANCE", juce::dontSendNotification);
+    shellLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    shellLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(shellLabel);
+    shellSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    shellSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    shellSlider.setRange(0.0, 1.0, 0.01);
+    shellSlider.setValue(processor.getShellResonanceMix(), juce::dontSendNotification);
+    shellSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    shellSlider.onValueChange = [this] { processor.setShellResonanceMix((float)shellSlider.getValue()); };
+    addAndMakeVisible(shellSlider);
+
     savePresetButton.onClick = [this]
     {
         if (presetChooser != nullptr)
@@ -238,6 +250,7 @@ void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
     attackSlider.setValue(processor.getTransient(), juce::dontSendNotification);
     sustainSlider.setValue(processor.getSustain(), juce::dontSendNotification);
     dynamicSlider.setValue(processor.getDynamicResponse(), juce::dontSendNotification);
+    shellSlider.setValue(processor.getShellResonanceMix(), juce::dontSendNotification);
     membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
     tensionSlider.setValue(processor.getMembraneTension(), juce::dontSendNotification);
     stiffnessSlider.setValue(processor.getMembraneStiffness(), juce::dontSendNotification);
@@ -339,6 +352,7 @@ void BlackDrumAudioProcessorEditor::resized()
     place(spectralLabel, spectralSlider, 1, 0);
     place(wireLabel, wireSlider, 2, 0);
     place(phaseVocoderLabel, phaseVocoderSlider, 3, 0);
+    place(shellLabel, shellSlider, 4, 0);
     place(attackLabel, attackSlider, 0, 1);
     place(sustainLabel, sustainSlider, 1, 1);
     place(dynamicLabel, dynamicSlider, 2, 1);
