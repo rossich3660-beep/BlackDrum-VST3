@@ -17,6 +17,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     noiseLowState[0] = noiseLowState[1] = 0.0f;
     spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
     membraneY1[0] = membraneY1[1] = membraneY2[0] = membraneY2[1] = membraneUpperY1[0] = membraneUpperY1[1] = membraneUpperY2[0] = membraneUpperY2[1] = membranePrev[0] = membranePrev[1] = 0.0f;
+    resetPhaseVocoder();
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -27,6 +28,132 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     resonatorB2 = -resonatorB0;
     resonatorA1 = -2.0f * radius * std::cos(w);
     resonatorA2 = radius * radius;
+}
+
+void BlackDrumAudioProcessor::resetPhaseVocoder()
+{
+    pvFFTBuffer.fill(0.0f);
+    pvInputRing.fill(0.0f);
+    pvOutputRing.fill(0.0f);
+    pvNormRing.fill(0.0f);
+    pvPreviousPhase.fill(0.0f);
+    pvSynthesisPhase.fill(0.0f);
+    pvInputWrite = 0;
+    pvHopCounter = 0;
+    pvSampleCounter = 0;
+}
+
+float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmount, float velocity)
+{
+    if (morphAmount <= 0.0001f)
+        return 0.0f;
+
+    constexpr float twoPi = 2.0f * juce::MathConstants<float>::pi;
+    constexpr float invFFT = 1.0f / (float) pvFFTSize;
+    constexpr float invBins = 1.0f / (float) (pvFFTSize / 2);
+
+    pvInputRing[(size_t) pvInputWrite] = input;
+    pvInputWrite = (pvInputWrite + 1) % pvFFTSize;
+    ++pvHopCounter;
+    ++pvSampleCounter;
+
+    if (pvHopCounter >= pvHopSize)
+    {
+        pvHopCounter = 0;
+
+        // Analyze the most recent 1024 samples. The Hann window keeps the
+        // overlap-add reconstruction stable while the phase accumulator keeps
+        // neighboring frames phase-coherent.
+        for (int n = 0; n < pvFFTSize; ++n)
+        {
+            const int ringIndex = (pvInputWrite + n) % pvFFTSize;
+            const float window = 0.5f - 0.5f * std::cos(twoPi * (float) n / (float) pvFFTSize);
+            pvFFTBuffer[(size_t) n] = pvInputRing[(size_t) ringIndex] * window;
+            pvFFTBuffer[(size_t) (n + pvFFTSize)] = 0.0f;
+        }
+
+        phaseVocoderFFT.performRealOnlyForwardTransform(pvFFTBuffer.data());
+
+        for (int k = 0; k < pvBins; ++k)
+        {
+            float real = 0.0f;
+            float imag = 0.0f;
+            if (k == 0)
+            {
+                real = pvFFTBuffer[0];
+            }
+            else if (k == pvFFTSize / 2)
+            {
+                real = pvFFTBuffer[1];
+            }
+            else
+            {
+                real = pvFFTBuffer[(size_t) (2 * k)];
+                imag = pvFFTBuffer[(size_t) (2 * k + 1)];
+            }
+
+            const float magnitude = std::sqrt(real * real + imag * imag) + 1.0e-9f;
+            const float phase = std::atan2(imag, real);
+            const float expectedAdvance = twoPi * (float) k * (float) pvHopSize * invFFT;
+            float delta = phase - pvPreviousPhase[(size_t) k] - expectedAdvance;
+
+            while (delta > juce::MathConstants<float>::pi)
+                delta -= twoPi;
+            while (delta < -juce::MathConstants<float>::pi)
+                delta += twoPi;
+
+            pvPreviousPhase[(size_t) k] = phase;
+            const float trueAdvance = expectedAdvance + delta;
+            pvSynthesisPhase[(size_t) k] += trueAdvance;
+
+            const float normalizedFrequency = (float) k * invBins;
+            // Morph the spectral envelope rather than simply changing volume:
+            // stronger hits push energy toward the upper partials, while the
+            // control amount determines how far the spectrum moves from the
+            // original sample toward that velocity-shaped target.
+            const float highLift = std::pow(normalizedFrequency, 1.35f) * (0.85f + 0.75f * velocity);
+            const float lowTrim = (1.0f - normalizedFrequency) * (0.30f + 0.20f * (1.0f - velocity));
+            const float targetGain = juce::jlimit(0.25f, 2.5f, 1.0f + highLift - lowTrim);
+            const float morphedMagnitude = magnitude * ((1.0f - morphAmount) + morphAmount * targetGain);
+
+            const float outReal = morphedMagnitude * std::cos(pvSynthesisPhase[(size_t) k]);
+            const float outImag = morphedMagnitude * std::sin(pvSynthesisPhase[(size_t) k]);
+            if (k == 0)
+                pvFFTBuffer[0] = outReal;
+            else if (k == pvFFTSize / 2)
+                pvFFTBuffer[1] = outReal;
+            else
+            {
+                pvFFTBuffer[(size_t) (2 * k)] = outReal;
+                pvFFTBuffer[(size_t) (2 * k + 1)] = outImag;
+            }
+        }
+
+        phaseVocoderFFT.performRealOnlyInverseTransform(pvFFTBuffer.data());
+
+        // The frame is scheduled into a delayed output ring. This gives the
+        // phase-vocoder layer enough look-back for analysis without delaying
+        // the dry/transient path of the drum.
+        const uint64_t frameStart = pvSampleCounter - (uint64_t) pvFFTSize + 1u;
+        for (int n = 0; n < pvFFTSize; ++n)
+        {
+            const float window = 0.5f - 0.5f * std::cos(twoPi * (float) n / (float) pvFFTSize);
+            const uint64_t absolute = frameStart + (uint64_t) n;
+            const size_t index = (size_t) (absolute % (uint64_t) pvRingSize);
+            pvOutputRing[index] += pvFFTBuffer[(size_t) n] * invFFT * window;
+            pvNormRing[index] += window * window;
+        }
+    }
+
+    if (pvSampleCounter <= (uint64_t) pvFFTSize)
+        return 0.0f;
+
+    const size_t readIndex = (size_t) ((pvSampleCounter - (uint64_t) pvFFTSize) % (uint64_t) pvRingSize);
+    const float norm = pvNormRing[readIndex];
+    const float output = norm > 1.0e-6f ? pvOutputRing[readIndex] / norm : 0.0f;
+    pvOutputRing[readIndex] = 0.0f;
+    pvNormRing[readIndex] = 0.0f;
+    return output;
 }
 
 bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
@@ -43,6 +170,7 @@ bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
     playbackPosition = -1.0;
     filterState[0] = filterState[1] = 0.0f;
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
+    resetPhaseVocoder();
     return true;
 }
 
@@ -203,6 +331,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             // Lightweight spectral resynthesis-inspired layer: split the source into
             // low tonal body, high-frequency residual and transient difference.
             const float specAmount = spectralMix.load();
+            const float phaseAmount = phaseVocoderMix.load();
             spectralLow[fc] += 0.075f * (raw - spectralLow[fc]);
             const float tonal = spectralLow[fc];
             const float residual = raw - tonal;
@@ -214,6 +343,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 + transientPart * transientEnv * (0.10f + 0.20f * velocity);
             const float spectralOut = shaped * (1.0f - specAmount)
                 + std::tanh(spectralLayer * voiceGain * transient * 1.10f) * specAmount;
+            // The phase-vocoder layer is intentionally auxiliary: transients and
+            // the direct sample stay immediate, while the STFT morph supplies the
+            // controllable spectral movement behind them.
+            const float phaseVocoder = processPhaseVocoder(
+                spectralOut, phaseAmount, juce::jlimit(0.0f, 1.0f, hitVelocity));
 
             // Each active voice gets its own noise stream and phase. This prevents
             // repeated MIDI hits from sharing an identical noise waveform.
@@ -347,7 +481,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 if (layerLimit > 1)
                     membrane *= 1.0f / std::sqrt((float)layerLimit);
             }
-            out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire + membrane));
+            out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire + membrane + phaseVocoder * phaseAmount * 0.85f));
         }
         const int activeLimit = juce::jlimit(1, 16, voiceCount.load());
         for (int vi = 0; vi < activeLimit; ++vi)
@@ -375,6 +509,7 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("bodyMix", getBodyMix(), nullptr);
     state.setProperty("wireNoiseMix", getWireNoiseMix(), nullptr);
     state.setProperty("spectralMix", getSpectralMix(), nullptr);
+    state.setProperty("phaseVocoderMix", getPhaseVocoderMix(), nullptr);
     state.setProperty("transient", getTransient(), nullptr);
     state.setProperty("sustain", getSustain(), nullptr);
     state.setProperty("dynamicResponse", getDynamicResponse(), nullptr);
@@ -400,6 +535,7 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setBodyMix((float) state.getProperty("bodyMix", getBodyMix()));
     setWireNoiseMix((float) state.getProperty("wireNoiseMix", getWireNoiseMix()));
     setSpectralMix((float) state.getProperty("spectralMix", getSpectralMix()));
+    setPhaseVocoderMix((float) state.getProperty("phaseVocoderMix", getPhaseVocoderMix()));
     setTransient((float) state.getProperty("transient", getTransient()));
     setSustain((float) state.getProperty("sustain", getSustain()));
     setDynamicResponse((float) state.getProperty("dynamicResponse", getDynamicResponse()));
