@@ -49,6 +49,8 @@ public:
     float getMembraneDecay() const { return membraneDecay.load(); }
     void setMembraneVelocity(float v) { membraneVelocity.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getMembraneVelocity() const { return membraneVelocity.load(); }
+    void setPhaseVocoderMix(float v) { phaseVocoderMix.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getPhaseVocoderMix() const { return phaseVocoderMix.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
 
@@ -93,6 +95,23 @@ private:
     float hitResonanceVariation = 1.0f;
     float hitNoiseVariation = 1.0f;
     std::atomic<float> spectralMix { 0.0f };
+    // Phase-vocoder spectral morphing: a deliberately small STFT layer blended
+    // with the direct drum signal. It uses fixed-size, allocation-free state.
+    std::atomic<float> phaseVocoderMix { 0.0f };
+    static constexpr int pvFFTSize = 1024;
+    static constexpr int pvHopSize = 128;
+    static constexpr int pvBins = pvFFTSize / 2 + 1;
+    static constexpr int pvRingSize = 4096;
+    juce::dsp::FFT phaseVocoderFFT { 10 };
+    std::array<float, pvFFTSize * 2> pvFFTBuffer {};
+    std::array<float, pvFFTSize> pvInputRing {};
+    std::array<float, pvRingSize> pvOutputRing {};
+    std::array<float, pvRingSize> pvNormRing {};
+    std::array<float, pvBins> pvPreviousPhase {};
+    std::array<float, pvBins> pvSynthesisPhase {};
+    int pvInputWrite = 0;
+    int pvHopCounter = 0;
+    uint64_t pvSampleCounter = 0;
     std::atomic<float> transientAmount { 0.5f };
     std::atomic<float> sustainAmount { 0.5f };
     std::atomic<float> dynamicResponse { 0.5f };
@@ -108,5 +127,7 @@ private:
     juce::CriticalSection sampleLock;
     juce::ValueTree makeStateTree() const;
     bool restoreStateTree(const juce::ValueTree&);
+    void resetPhaseVocoder();
+    float processPhaseVocoder(float input, float morphAmount, float velocity);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
