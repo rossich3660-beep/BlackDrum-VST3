@@ -109,7 +109,29 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 }
                 voices[(size_t)slot].position = 0.0;
                 voices[(size_t)slot].velocity = hitVelocity;
-                voices[(size_t)slot].age = ++voiceAge;
+                // Every hit receives its own deterministic micro-variation.  The
+                // variation is intentionally small so the instrument remains musical.
+                auto nextHitRandom = [this]() -> float
+                {
+                    noiseState ^= noiseState << 13;
+                    noiseState ^= noiseState >> 17;
+                    noiseState ^= noiseState << 5;
+                    return (float)(noiseState & 0x00ffffffu) / 8388607.5f - 1.0f;
+                };
+                auto& newVoice = voices[(size_t)slot];
+                newVoice.phaseMod0 = nextHitRandom() * juce::MathConstants<float>::pi;
+                newVoice.phaseMod1 = nextHitRandom() * juce::MathConstants<float>::pi;
+                newVoice.noiseSeed = noiseState ^ (uint32_t)(++voiceAge * 747796405u);
+                for (int vc = 0; vc < 2; ++vc)
+                {
+                    newVoice.membraneY1[vc] = std::sin(newVoice.phaseMod0) * 0.0025f;
+                    newVoice.membraneY2[vc] = std::sin(newVoice.phaseMod0 - 0.13f) * 0.0025f;
+                    newVoice.membraneUpperY1[vc] = std::sin(newVoice.phaseMod1) * 0.0015f;
+                    newVoice.membraneUpperY2[vc] = std::sin(newVoice.phaseMod1 - 0.17f) * 0.0015f;
+                    newVoice.membranePrev[vc] = 0.0f;
+                    newVoice.noiseLow[vc] = 0.0f;
+                }
+                newVoice.age = voiceAge;
                 playbackPosition = 0.0;
                 filterState[0] = filterState[1] = 0.0f;
                 resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
@@ -187,21 +209,33 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const float spectralOut = shaped * (1.0f - specAmount)
                 + std::tanh(spectralLayer * voiceGain * transient * 1.10f) * specAmount;
 
-            // Snare-wire layer: deterministic filtered noise, excited by the hit and
-            // shaped by the sample's own decay. No allocation or locking in the audio loop.
+            // Each active voice gets its own noise stream and phase. This prevents
+            // repeated MIDI hits from sharing an identical noise waveform.
             float wire = 0.0f;
             const float wireAmount = wireNoiseMix.load();
+            const int voiceLimitForLayers = juce::jlimit(1, 16, voiceCount.load());
             if (wireAmount > 0.0001f)
             {
-                noiseState ^= noiseState << 13;
-                noiseState ^= noiseState >> 17;
-                noiseState ^= noiseState << 5;
-                const float white = ((float)(noiseState & 0x00ffffffu) / 8388607.5f) - 1.0f;
-                noiseLowState[fc] += 0.22f * (white - noiseLowState[fc]);
-                const float bandNoise = white - noiseLowState[fc];
-                const float decay = std::exp(-playbackPosition / (float)(sourceRate * (0.10f + 0.12f * velocity)));
-                const float excitation = (0.012f + 0.095f * velocity) * decay * wireAmount * hitNoiseVariation;
-                wire = bandNoise * excitation;
+                for (int vi = 0; vi < voiceLimitForLayers; ++vi)
+                {
+                    auto& vce = voices[(size_t)vi];
+                    if (vce.position < 0.0 || vce.position >= sample.getNumSamples())
+                        continue;
+
+                    vce.noiseSeed ^= vce.noiseSeed << 13;
+                    vce.noiseSeed ^= vce.noiseSeed >> 17;
+                    vce.noiseSeed ^= vce.noiseSeed << 5;
+                    const float white = ((float)(vce.noiseSeed & 0x00ffffffu) / 8388607.5f) - 1.0f;
+                    vce.noiseLow[fc] += 0.22f * (white - vce.noiseLow[fc]);
+                    const float bandNoise = white - vce.noiseLow[fc];
+                    const float voiceElapsed = (float)(vce.position / juce::jmax(1.0, sourceRate * 0.035));
+                    const float decay = std::exp(-(float)vce.position / (float)(sourceRate * (0.10f + 0.12f * vce.velocity)));
+                    const float excitation = (0.012f + 0.095f * std::pow(vce.velocity, 1.1f))
+                        * decay * wireAmount * hitNoiseVariation;
+                    wire += bandNoise * excitation;
+                }
+                if (voiceLimitForLayers > 1)
+                    wire *= 1.0f / std::sqrt((float)voiceLimitForLayers);
             }
             float membrane = 0.0f;
             if (membraneEnabled.load())
@@ -210,28 +244,51 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 const float stiffness = membraneStiffness.load();
                 const float decayControl = membraneDecay.load();
                 const float velocitySense = membraneVelocity.load();
-                const float modeledVelocity = juce::jlimit(0.0f, 1.0f,
-                    hitVelocity * (1.0f - velocitySense) + velocity * velocitySense);
-                // Two stable resonant modes approximate the head's fundamental and a stiffened upper mode.
-                const float f0 = 105.0f + 185.0f * tension + 35.0f * modeledVelocity;
-                const float f1 = juce::jmin(0.42f * sr, f0 * (2.05f + 1.25f * stiffness));
-                const float radius = 0.94f + 0.057f * decayControl;
-                const float drive = raw - membranePrev[fc];
-                membranePrev[fc] = raw;
-                const float w0 = 2.0f * juce::MathConstants<float>::pi * f0 / sr;
-                const float w1 = 2.0f * juce::MathConstants<float>::pi * f1 / sr;
-                const float mode0 = drive * (0.025f + 0.11f * modeledVelocity)
-                    + 2.0f * radius * std::cos(w0) * membraneY1[fc]
-                    - radius * radius * membraneY2[fc];
-                membraneY2[fc] = membraneY1[fc];
-                membraneY1[fc] = juce::jlimit(-4.0f, 4.0f, mode0);
-                const float upperRadius = radius * (0.965f - 0.025f * stiffness);
-                const float mode1 = drive * (0.008f + 0.025f * stiffness * modeledVelocity)
-                    + 2.0f * upperRadius * std::cos(w1) * membraneUpperY1[fc]
-                    - upperRadius * upperRadius * membraneUpperY2[fc];
-                membraneUpperY2[fc] = membraneUpperY1[fc];
-                membraneUpperY1[fc] = juce::jlimit(-4.0f, 4.0f, mode1);
-                membrane = membraneY1[fc] * 0.18f + membraneUpperY1[fc] * 0.08f;
+                const int layerLimit = juce::jlimit(1, 16, voiceCount.load());
+
+                for (int vi = 0; vi < layerLimit; ++vi)
+                {
+                    auto& vce = voices[(size_t)vi];
+                    if (vce.position < 0.0 || vce.position >= sample.getNumSamples())
+                        continue;
+
+                    const float modeledVelocity = juce::jlimit(0.0f, 1.0f,
+                        vce.velocity * (1.0f - velocitySense) + std::pow(vce.velocity, 1.8f - 1.25f * dynamicResponse.load()) * velocitySense);
+
+                    const float f0 = 105.0f + 185.0f * tension + 35.0f * modeledVelocity;
+                    const float f1 = juce::jmin(0.42f * sr, f0 * (2.05f + 1.25f * stiffness));
+                    const float radius = 0.94f + 0.057f * decayControl;
+                    const float voiceIdxPos = (float)vce.position;
+                    const float drive = raw - vce.membranePrev[fc];
+                    vce.membranePrev[fc] = raw;
+
+                    const float w0 = 2.0f * juce::MathConstants<float>::pi * f0 / sr;
+                    const float w1 = 2.0f * juce::MathConstants<float>::pi * f1 / sr;
+
+                    // Per-hit phase offsets are injected as a tiny, deterministic
+                    // modulation of each resonant mode. They are different for every
+                    // note-on, so repeated strikes do not line up perfectly.
+                    const float phase0 = vce.phaseMod0 + voiceIdxPos * 0.00011f;
+                    const float phase1 = vce.phaseMod1 + voiceIdxPos * 0.00017f;
+                    const float mode0 = drive * (0.025f + 0.11f * modeledVelocity)
+                        + 2.0f * radius * std::cos(w0 + 0.0025f * std::sin(phase0)) * vce.membraneY1[fc]
+                        - radius * radius * vce.membraneY2[fc];
+                    vce.membraneY2[fc] = vce.membraneY1[fc];
+                    vce.membraneY1[fc] = juce::jlimit(-4.0f, 4.0f, mode0);
+
+                    const float upperRadius = radius * (0.965f - 0.025f * stiffness);
+                    const float mode1 = drive * (0.008f + 0.025f * stiffness * modeledVelocity)
+                        + 2.0f * upperRadius * std::cos(w1 + 0.0035f * std::sin(phase1)) * vce.membraneUpperY1[fc]
+                        - upperRadius * upperRadius * vce.membraneUpperY2[fc];
+                    vce.membraneUpperY2[fc] = vce.membraneUpperY1[fc];
+                    vce.membraneUpperY1[fc] = juce::jlimit(-4.0f, 4.0f, mode1);
+
+                    const float env = std::exp(-(float)vce.position / (float)(sourceRate * (0.08f + 0.14f * decayControl)));
+                    membrane += (vce.membraneY1[fc] * 0.18f + vce.membraneUpperY1[fc] * 0.08f) * env;
+                }
+
+                if (layerLimit > 1)
+                    membrane *= 1.0f / std::sqrt((float)layerLimit);
             }
             out.setSample(ch, i, std::tanh(spectralOut * tailShape + wire + membrane));
         }
