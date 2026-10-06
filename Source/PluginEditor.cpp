@@ -27,8 +27,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
         b.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff3b4b53));
         b.setColour(juce::TextButton::textColourOffId, juce::Colour(0xffeaf0f3));
         b.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
-        b.setColour(juce::TextButton::outlineColourId, juce::Colour(0xff4a565c));
-    };
+        };
     for (auto* b : { &loadButton, &previewButton, &savePresetButton, &loadPresetButton })
     {
         styleButton(*b);
