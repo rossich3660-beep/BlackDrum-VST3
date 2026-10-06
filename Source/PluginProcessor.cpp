@@ -457,3 +457,8 @@ juce::AudioProcessorEditor* BlackDrumAudioProcessor::createEditor()
 {
     return new BlackDrumAudioProcessorEditor(*this);
 }
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new BlackDrumAudioProcessor();
+}
