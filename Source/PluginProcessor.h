@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "AutoSettings.h"
 
 class BlackDrumAudioProcessor : public juce::AudioProcessor {
 public:
@@ -55,6 +56,12 @@ public:
     float getShellResonanceMix() const { return shellResonanceMix.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
+
+    SampleFeatures getSampleFeatures() const;
+    AutoSettings getAutoSettings() const;
+    void applyAutoSettings(const AutoSettings&, bool markAsManual = false);
+    bool hasManualAutoEdits() const { return manualAutoEdits.load(); }
+    void setManualAutoEdits(bool v) { manualAutoEdits.store(v); }
 
 private:
     juce::AudioFormatManager formats;
@@ -122,6 +129,12 @@ private:
     std::atomic<float> dynamicResponse { 0.5f };
     std::atomic<bool> membraneEnabled { false };
     std::atomic<float> membraneTension { 0.5f }, membraneStiffness { 0.4f }, membraneDecay { 0.5f }, membraneVelocity { 0.6f };
+
+    std::atomic<float> autoBrightness { 0.5f }, autoSnap { 0.5f }, autoNoise { 0.5f };
+    std::atomic<float> autoAttackSoftening { 0.5f }, autoTailShorten { 0.5f }, autoPitchDrop { 0.1f };
+    std::atomic<float> autoSaturation { 0.3f }, autoBodyBoost { 0.5f }, autoVelocityCurve { 0.4f };
+    std::atomic<bool> manualAutoEdits { false };
+    SampleFeatures sampleFeatures {};
     float membraneY1[2] = { 0.0f, 0.0f }, membraneY2[2] = { 0.0f, 0.0f };
     float membraneUpperY1[2] = { 0.0f, 0.0f }, membraneUpperY2[2] = { 0.0f, 0.0f };
     float membranePrev[2] = { 0.0f, 0.0f };
