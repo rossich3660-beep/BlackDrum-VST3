@@ -13,6 +13,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     outputRate = rate > 0.0 ? rate : 44100.0;
     playbackPosition = -1.0;
     filterState[0] = filterState[1] = 0.0f;
+    bodyExcitation[0] = bodyExcitation[1] = 0.0f;
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
     noiseLowState[0] = noiseLowState[1] = 0.0f;
     spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
@@ -220,6 +221,7 @@ bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
     playbackPosition = -1.0;
     filterState[0] = filterState[1] = 0.0f;
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
+    bodyExcitation[0] = bodyExcitation[1] = 0.0f;
     resetPhaseVocoder();
     compressorEnvelope[0] = compressorEnvelope[1] = 0.0f;
     compressorGain[0] = compressorGain[1] = 1.0f;
@@ -374,12 +376,21 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
 
             filterState[fc] += filterCoefficient * (raw - filterState[fc]);
             const float bright = filterState[fc];
-            const float body = resonatorB0 * raw + resonatorB1 * 0.0f + resonatorB2 * 0.0f
+            // Body resonance must be driven by a smoothed excitation, not the
+            // raw sample edge. Driving the resonator directly from sharp sample
+            // discontinuities was creating random-sounding short transients.
+            const float bodyDriveCoeff = 0.010f + 0.018f * velocity;
+            bodyExcitation[fc] += bodyDriveCoeff * (raw - bodyExcitation[fc]);
+            const float bodyDrive = bodyExcitation[fc];
+            const float body = resonatorB0 * bodyDrive
                              - resonatorA1 * resonatorY1[fc] - resonatorA2 * resonatorY2[fc];
             resonatorY2[fc] = resonatorY1[fc];
             resonatorY1[fc] = body;
 
-            const float blended = raw * (1.0f - resonanceMix) + body * resonanceMix;
+            // Keep the original sample as the main signal. Body resonance is an
+            // additive, low-level component rather than a crossfade replacement.
+            const float bodyLevel = 0.22f + 0.18f * velocity;
+            const float blended = raw + body * resonanceMix * bodyLevel;
             const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity))
                                            * voiceGain * transient * tailShape * 1.10f);
 
