@@ -73,6 +73,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     };
     setupKnob(compressorSlider, compressorLabel, "COMPRESSOR", processor.getCompressorMix(), [this](float v){ processor.setCompressorMix(v); });
     setupKnob(roomReverbSlider, roomReverbLabel, "ROOM REVERB", processor.getRoomReverbMix(), [this](float v){ processor.setRoomReverbMix(v); });
+    setupKnob(physicalSynthSlider, physicalSynthLabel, "PHYSICAL SYNTH", processor.getPhysicalSynthMix(), [this](float v){ processor.setPhysicalSynthMix(v); });
     setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
     setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
     setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
@@ -242,6 +243,7 @@ void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
     dynamicSlider.setValue(processor.getDynamicResponse(), juce::dontSendNotification);
     compressorSlider.setValue(processor.getCompressorMix(), juce::dontSendNotification);
     roomReverbSlider.setValue(processor.getRoomReverbMix(), juce::dontSendNotification);
+    physicalSynthSlider.setValue(processor.getPhysicalSynthMix(), juce::dontSendNotification);
     membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
     tensionSlider.setValue(processor.getMembraneTension(), juce::dontSendNotification);
     stiffnessSlider.setValue(processor.getMembraneStiffness(), juce::dontSendNotification);
@@ -373,6 +375,8 @@ void BlackDrumAudioProcessorEditor::resized()
     compressorSlider.setBounds(48, 450, 64, 64);
     roomReverbLabel.setBounds(148, 430, 112, 20);
     roomReverbSlider.setBounds(172, 450, 64, 64);
-    savePresetButton.setBounds(330, 455, 220, 36);
-    loadPresetButton.setBounds(590, 455, 220, 36);
+    physicalSynthLabel.setBounds(272, 430, 112, 20);
+    physicalSynthSlider.setBounds(296, 450, 64, 64);
+    savePresetButton.setBounds(405, 455, 170, 36);
+    loadPresetButton.setBounds(600, 455, 170, 36);
 }
