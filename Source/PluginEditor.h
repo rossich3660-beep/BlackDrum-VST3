@@ -20,8 +20,8 @@ private:
  std::unique_ptr<juce::FileChooser> presetChooser;
  juce::TextButton loadButton{"LOAD SAMPLE"}, playButton{"PREVIEW"}, removeButton{"REMOVE"};
  juce::TextButton savePresetButton{"SAVE PRESET"}, loadPresetButton{"LOAD PRESET"};
- juce::Label title, filename, hint, voiceCountLabel, bodyMixLabel, spectralLabel, wireLabel, phaseVocoderLabel, attackLabel, sustainLabel, dynamicLabel, membraneTitle, tensionLabel, stiffnessLabel, decayLabel, velocityLabel;
- juce::Slider voiceCountSlider, bodyMixSlider, spectralSlider, wireSlider, phaseVocoderSlider, attackSlider, sustainSlider, dynamicSlider, tensionSlider, stiffnessSlider, decaySlider, velocitySlider;
+ juce::Label title, filename, hint, voiceCountLabel, bodyMixLabel, spectralLabel, wireLabel, phaseVocoderLabel, attackLabel, sustainLabel, dynamicLabel, membraneTitle, tensionLabel, stiffnessLabel, decayLabel, velocityLabel, compressorLabel, roomReverbLabel;
+ juce::Slider voiceCountSlider, bodyMixSlider, spectralSlider, wireSlider, phaseVocoderSlider, attackSlider, sustainSlider, dynamicSlider, tensionSlider, stiffnessSlider, decaySlider, velocitySlider, compressorSlider, roomReverbSlider;
     juce::ToggleButton membraneToggle { "MEMBRANE MODEL" };
  juce::Rectangle<int> dropArea;
  bool dragHover=false;
