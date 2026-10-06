@@ -87,6 +87,7 @@ private:
     double sourceRate=44100.0, outputRate=44100.0, playbackPosition=-1.0;
     float voiceGain=1.0f, playbackRate=1.0f, filterCoefficient=1.0f;
     float filterState[2]={0.0f,0.0f};
+    float bodyExcitation[2]={0.0f,0.0f};
     // A damped, low-level resonator adds a little drum-body energy without replacing the sample.
     float resonatorY1[2]={0.0f,0.0f}, resonatorY2[2]={0.0f,0.0f};
     float resonatorB0=0.0f, resonatorB1=0.0f, resonatorB2=0.0f;
