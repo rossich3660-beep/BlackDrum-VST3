@@ -23,7 +23,7 @@ private:
     void savePresetTo(const juce::File&);
     void loadPresetFrom(const juce::File&);
     bool isSupportedAudioFile(const juce::File&) const;
-    void startAnalysis();
+    void startAnalysis(bool forceApply);
     void handleAsyncUpdate() override;
     void syncAutoControls(const AutoSettings&);
     void syncEngineControls();
@@ -38,6 +38,7 @@ private:
     std::array<std::atomic<float>, 9> pendingAuto {};
     std::atomic<bool> analysisReady { false };
     std::atomic<bool> analysisRunning { false };
+    bool analysisForceApply = true;
 
     juce::Label title, subtitle, sampleLabel, analysisStatus, featureSummary, hint, voiceCountLabel;
     juce::Label bodyMixLabel, spectralLabel, wireLabel, phaseVocoderLabel, shellLabel;
