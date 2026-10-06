@@ -210,13 +210,14 @@ void BlackDrumAudioProcessor::triggerVoice(float velocity)
     selected->age = voiceCounter++;
     selected->velocity = clamp01(velocity);
     selected->envelope = 1.0f;
+    selected->lifeSamples = 0;
     selected->noise = 0x9e3779b9u ^ (uint32_t) selected->age * 747796405u;
 }
 
-float BlackDrumAudioProcessor::renderVoice(Voice& v, int channel)
+float BlackDrumAudioProcessor::renderVoice(Voice& v, int)
 {
     const float vel = clamp01(v.velocity);
-    const float velocityCurve = std::pow(vel, 0.70f + 0.55f * velocityResponse.load());
+    const float velocityCurve = std::pow(vel, 0.62f + 0.45f * velocityResponse.load());
     const float tune = topTuning.load();
     const float bottomTune = bottomTuning.load();
     const float diameter = shellDiameter.load();
@@ -229,48 +230,50 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int channel)
     const float hardness = stickHardness.load();
     const float refMix = sampleInfluence.load();
 
-    const float ageSeconds = (float) (v.age / juce::jmax(1.0, outputRate));
+    const float ageSeconds = (float) v.lifeSamples / (float) juce::jmax(1.0, outputRate);
     const float attackPhase = juce::jlimit(0.0f, 1.0f,
-        (float) (v.age / juce::jmax(1.0, outputRate * 0.035)));
+        (float) v.lifeSamples / (float) juce::jmax(1.0, (int) std::round(outputRate * 0.045)));
     const float referenceHit = referenceSample(attackPhase);
-    const float refEnv = referenceEnvelope(
-        juce::jlimit(0.0f, 1.0f, ageSeconds / juce::jmax(0.08f, referenceDuration)));
+    const float refPhase = juce::jlimit(0.0f, 1.0f,
+        ageSeconds / juce::jmax(0.08f, referenceDuration));
+    const float refEnv = referenceEnvelope(refPhase);
 
     v.noise ^= v.noise << 13;
     v.noise ^= v.noise >> 17;
     v.noise ^= v.noise << 5;
     const float white = ((float) (v.noise & 0xffffu) / 32767.5f) - 1.0f;
 
-    const float transient = std::tanh(
-        (referenceHit * refMix + white * (1.0f - refMix) * 0.34f)
-        * (1.1f + 2.4f * velocityCurve) * (0.65f + 0.7f * hardness));
+    // The reference is an exciter, never the playback signal.
+    const float exciter = std::tanh(
+        (referenceHit * (0.72f + 0.55f * refMix)
+         + white * (0.18f + 0.48f * (1.0f - refMix)) * (0.25f + 0.75f * refEnv))
+        * (1.25f + 2.8f * velocityCurve)
+        * (0.72f + 0.65f * hardness));
 
-    const float headBase = 155.0f + 155.0f * tune + 0.018f * referenceCentroid;
-    const float bottomBase = 190.0f + 145.0f * bottomTune + 0.012f * referenceCentroid;
-    const float topRadius = juce::jlimit(0.885f, 0.997f,
-        0.982f - 0.070f * topDamping.load() + 0.010f * velocityCurve);
-    const float bottomRadius = juce::jlimit(0.875f, 0.997f,
-        0.978f - 0.075f * bottomDamping.load());
+    const float headBase = 155.0f + 170.0f * tune + 0.020f * referenceCentroid;
+    const float bottomBase = 185.0f + 155.0f * bottomTune + 0.012f * referenceCentroid;
 
-    const float topExciter = transient * (0.80f + 0.45f * velocityCurve);
-    const float bottomExciter = transient * (0.25f + 0.28f * res);
+    const float topRadius = juce::jlimit(0.900f, 0.996f,
+        0.972f - 0.045f * topDamping.load() + 0.008f * velocityCurve);
+    const float bottomRadius = juce::jlimit(0.895f, 0.996f,
+        0.970f - 0.050f * bottomDamping.load());
 
-    const float top = resonator(topExciter, headBase, topRadius,
-                                v.topY1, v.topY2, outputRate);
-    const float bottom = resonator(bottomExciter, bottomBase, bottomRadius,
-                                   v.bottomY1, v.bottomY2, outputRate);
+    const float top = resonator(exciter * (1.8f + 1.1f * velocityCurve),
+                                headBase, topRadius, v.topY1, v.topY2, outputRate);
+    const float bottom = resonator(exciter * (0.70f + 0.45f * res),
+                                   bottomBase, bottomRadius, v.bottomY1, v.bottomY2, outputRate);
 
     float modal = 0.0f;
     for (int m = 0; m < 8; ++m)
     {
         const float freq = modeFrequency(headBase, m, tune)
-            * (1.0f + 0.045f * (material - 0.5f) + 0.03f * velocityCurve);
-        const float radius = juce::jlimit(0.88f, 0.998f,
-            0.990f - 0.055f * topDamping.load()
-            - 0.008f * (float) m - 0.035f * depth);
-        const float gain = (m == 0 ? 0.52f : 0.18f / (1.0f + 0.25f * m))
-            * (0.7f + 0.6f * velocityCurve);
-        modal += resonator(topExciter, freq, radius,
+            * (1.0f + 0.055f * (material - 0.5f) + 0.035f * velocityCurve);
+        const float radius = juce::jlimit(0.885f, 0.997f,
+            0.972f - 0.040f * topDamping.load()
+            - 0.006f * (float) m - 0.020f * depth);
+        const float gain = (m == 0 ? 0.72f : 0.30f / (1.0f + 0.20f * m))
+            * (0.75f + 0.55f * velocityCurve);
+        modal += resonator(exciter * (1.15f + 0.55f * res), freq, radius,
                            v.modeY1[(size_t) m], v.modeY2[(size_t) m], outputRate) * gain;
     }
 
@@ -278,44 +281,52 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int channel)
     static constexpr float shellRatios[4] = { 1.0f, 1.34f, 1.91f, 2.67f };
     for (int m = 0; m < 4; ++m)
     {
-        const float base = 95.0f + 105.0f * (1.0f - depth) + 170.0f * diameter;
-        const float freq = base * shellRatios[m] * (0.82f + 0.36f * material);
-        const float radius = juce::jlimit(0.86f, 0.996f,
-            0.965f + 0.018f * material - 0.015f * depth - 0.006f * m);
-        const float gain = (0.20f / (1.0f + 0.35f * m)) * (0.7f + 0.6f * res);
-        shell += resonator(topExciter * 0.72f, freq, radius,
+        const float base = 100.0f + 125.0f * (1.0f - depth) + 190.0f * diameter;
+        const float freq = base * shellRatios[m] * (0.82f + 0.40f * material);
+        const float radius = juce::jlimit(0.87f, 0.995f,
+            0.955f + 0.018f * material - 0.012f * depth - 0.006f * m);
+        const float gain = (0.28f / (1.0f + 0.28f * m)) * (0.75f + 0.55f * res);
+        shell += resonator(exciter * 0.90f, freq, radius,
                            v.shellY1[(size_t) m], v.shellY2[(size_t) m], outputRate) * gain;
     }
 
-    const float wireExciter = 0.55f * bottom + 0.45f * transient
-        + white * (0.16f + 0.34f * velocityCurve) * refEnv;
+    const float wireExciter = 0.62f * bottom + 0.38f * exciter
+        + white * (0.22f + 0.40f * velocityCurve) * (0.35f + 0.65f * refEnv);
 
-    const float wireFreq = 1850.0f + 3300.0f * wireT
-        + 800.0f * referenceHigh;
-    const float wireRadius = juce::jlimit(0.72f, 0.995f,
-        0.945f + 0.035f * wireT - 0.10f * wireD);
-    const float wire1 = resonator(wireExciter, wireFreq, wireRadius,
+    const float wireFreq = 1500.0f + 3800.0f * wireT + 900.0f * referenceHigh;
+    const float wireRadius = juce::jlimit(0.70f, 0.991f,
+        0.920f + 0.055f * wireT - 0.095f * wireD);
+
+    const float wireA = resonator(wireExciter, wireFreq, wireRadius,
                                   v.wire1, v.wire2, outputRate);
-    const float wire2 = resonator(wireExciter * 0.55f, wireFreq * 1.61f,
-                                  juce::jlimit(0.70f, 0.992f, wireRadius - 0.012f),
-                                  v.wire3, v.wire2, outputRate);
-    const float wire = (wire1 + 0.55f * wire2) * wires
-        * (0.45f + 0.75f * velocityCurve);
+    const float wireB = resonator(wireExciter * 0.62f, wireFreq * 1.57f,
+                                  juce::jlimit(0.68f, 0.988f, wireRadius - 0.018f),
+                                  v.wire3, v.wire4, outputRate);
+    const float wire = (wireA + 0.62f * wireB) * wires
+        * (0.55f + 0.90f * velocityCurve);
 
-    const float tonal = top * 1.10f + bottom * 0.55f + modal + shell * (0.8f + 0.5f * res);
-    const float noiseLayer = wire + white * (0.045f + 0.08f * referenceHigh) * refEnv;
-    const float headBalance = 0.82f + 0.20f * (1.0f - diameter);
-    const float roomScale = 1.0f + 0.10f * room.load();
+    const float tonal = top * 1.15f + bottom * 0.58f + modal + shell * (0.95f + 0.55f * res);
+    const float noiseLayer = wire + white * (0.055f + 0.10f * referenceHigh) * refEnv;
 
-    const float naturalDecay = std::exp(-ageSeconds *
-        (1.6f + 4.0f * topDamping.load() + 2.0f * bottomDamping.load()));
-    const float referenceTail = 0.55f + 0.45f * refEnv;
-    const float level = velocityCurve * naturalDecay * referenceTail * roomScale;
+    const float decaySeconds = 0.16f
+        + 0.85f * (1.0f - topDamping.load())
+        + 0.55f * (1.0f - bottomDamping.load())
+        + 0.35f * (1.0f - wireD);
+    const float naturalDecay = std::exp(-ageSeconds / juce::jmax(0.08f, decaySeconds));
+    const float referenceTail = 0.35f + 0.65f * refEnv;
+    const float level = (0.75f + 0.65f * velocityCurve) * naturalDecay
+        * (0.72f + 0.28f * referenceTail);
 
-    const float out = std::tanh((tonal * headBalance + noiseLayer * (0.72f + 0.38f * res)) * level);
+    // Gain staging is deliberately conservative before the final soft clip.
+    float out = (tonal * 3.4f + noiseLayer * 2.2f) * level;
+    out += exciter * (0.10f + 0.16f * velocityCurve) * naturalDecay;
+    out *= 0.92f + 0.08f * room.load();
+    out = std::tanh(out * (1.10f + 0.45f * velocityCurve));
+
+    ++v.lifeSamples;
     ++v.age;
 
-    if (ageSeconds > 2.5f || (std::abs(out) < 1.0e-5f && ageSeconds > 0.35f))
+    if (ageSeconds > 2.5f)
         v.active = false;
 
     return out;
