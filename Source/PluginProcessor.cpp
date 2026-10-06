@@ -231,8 +231,9 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int)
     const float refMix = sampleInfluence.load();
 
     const float ageSeconds = (float) v.lifeSamples / (float) juce::jmax(1.0, outputRate);
+    const int attackSamples = juce::jmax(1, (int) std::lround(outputRate * 0.045));
     const float attackPhase = juce::jlimit(0.0f, 1.0f,
-        (float) v.lifeSamples / (float) juce::jmax(1.0, (int) std::round(outputRate * 0.045)));
+        (float) v.lifeSamples / (float) attackSamples);
     const float referenceHit = referenceSample(attackPhase);
     const float refPhase = juce::jlimit(0.0f, 1.0f,
         ageSeconds / juce::jmax(0.08f, referenceDuration));
