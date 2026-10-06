@@ -18,6 +18,11 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     spectralLow[0] = spectralLow[1] = spectralPrev[0] = spectralPrev[1] = 0.0f;
     membraneY1[0] = membraneY1[1] = membraneY2[0] = membraneY2[1] = membraneUpperY1[0] = membraneUpperY1[1] = membraneUpperY2[0] = membraneUpperY2[1] = membranePrev[0] = membranePrev[1] = 0.0f;
     resetPhaseVocoder();
+    compressorEnvelope[0] = compressorEnvelope[1] = 0.0f;
+    compressorGain[0] = compressorGain[1] = 1.0f;
+    for (auto& ch : roomDelayBuffer) ch.fill(0.0f);
+    roomWritePositions.fill(0);
+    roomDampingState[0] = roomDampingState[1] = 0.0f;
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -156,6 +161,38 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
     return output;
 }
 
+float BlackDrumAudioProcessor::processRoomReverb(float input, int channel, float velocity)
+{
+    const float mix = roomReverbMix.load();
+    if (mix <= 0.0001f)
+        return 0.0f;
+
+    const int ch = juce::jlimit(0, 1, channel);
+    float wet = 0.0f;
+    const float feedback = 0.72f + 0.10f * mix + 0.05f * velocity;
+    const float damping = 0.16f + 0.18f * (1.0f - mix);
+
+    for (int m = 0; m < roomDelayCount; ++m)
+    {
+        int& wp = roomWritePositions[(size_t)m];
+        const int delay = roomDelayLengths[(size_t)m];
+        const int readPos = (wp - delay + roomMaxDelay) % roomMaxDelay;
+        const float delayed = roomDelayBuffer[(size_t)ch][(size_t)readPos];
+        const float diffused = delayed - roomDampingState[(size_t)ch];
+        roomDampingState[(size_t)ch] += damping * diffused;
+        const float injection = input + 0.22f * roomDampingState[(size_t)ch];
+        roomDelayBuffer[(size_t)ch][(size_t)wp] =
+            injection + roomDampingState[(size_t)ch] * feedback * 0.42f;
+        wet += roomDampingState[(size_t)ch] * (0.18f + 0.04f * (float)m);
+        wp = (wp + 1) % roomMaxDelay;
+    }
+
+    // A little velocity-dependent early reflection emphasis makes harder hits
+    // feel closer/larger rather than simply louder.
+    const float roomShape = 0.55f + 0.45f * velocity;
+    return wet * mix * roomShape;
+}
+
 bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
 {
     std::unique_ptr<juce::AudioFormatReader> r(formats.createReaderFor(f));
@@ -171,6 +208,11 @@ bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
     filterState[0] = filterState[1] = 0.0f;
     resonatorY1[0] = resonatorY1[1] = resonatorY2[0] = resonatorY2[1] = 0.0f;
     resetPhaseVocoder();
+    compressorEnvelope[0] = compressorEnvelope[1] = 0.0f;
+    compressorGain[0] = compressorGain[1] = 1.0f;
+    for (auto& ch : roomDelayBuffer) ch.fill(0.0f);
+    roomWritePositions.fill(0);
+    roomDampingState[0] = roomDampingState[1] = 0.0f;
     return true;
 }
 
@@ -478,9 +520,31 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const float phaseVocoder = processPhaseVocoder(
                 spectralOut, phaseVocoderMix.load(),
                 juce::jlimit(0.0f, 1.0f, hitVelocity));
-            out.setSample(ch, i, std::tanh(
-                spectralOut * tailShape + wire + membrane
-                + phaseVocoder * phaseVocoderMix.load() * 0.85f));
+            float living = spectralOut * tailShape + wire + membrane
+                + phaseVocoder * phaseVocoderMix.load() * 0.85f;
+
+            // Parallel, velocity-aware compression. The dry transient remains intact;
+            // the compressed branch mainly fills the body and decaying tail.
+            const float compMix = compressorMix.load();
+            const float level = std::abs(living);
+            const float envCoeff = level > compressorEnvelope[(size_t)fc] ? 0.018f : 0.0025f;
+            compressorEnvelope[(size_t)fc] += envCoeff * (level - compressorEnvelope[(size_t)fc]);
+            const float threshold = 0.16f - 0.05f * velocity;
+            const float over = juce::jmax(0.0f, compressorEnvelope[(size_t)fc] - threshold);
+            const float ratio = 2.0f + 4.0f * compMix;
+            const float targetGain = over > 0.0f
+                ? std::pow(juce::jmax(0.05f, threshold / (threshold + over)), 1.0f - 1.0f / ratio)
+                : 1.0f;
+            const float gainCoeff = targetGain < compressorGain[(size_t)fc] ? 0.035f : 0.006f;
+            compressorGain[(size_t)fc] += gainCoeff * (targetGain - compressorGain[(size_t)fc]);
+            const float compressed = living * compressorGain[(size_t)fc] * (1.0f + 0.10f * compMix * (1.0f - velocity));
+            living += compressed * (0.16f + 0.34f * compMix);
+
+            // Short room reflections are velocity-shaped so the reverb adds depth
+            // and "air" rather than a long synthetic wash.
+            living += processRoomReverb(living, fc, velocity);
+
+            out.setSample(ch, i, std::tanh(living));
         }
         const int activeLimit = juce::jlimit(1, 16, voiceCount.load());
         for (int vi = 0; vi < activeLimit; ++vi)
@@ -509,6 +573,8 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("wireNoiseMix", getWireNoiseMix(), nullptr);
     state.setProperty("spectralMix", getSpectralMix(), nullptr);
     state.setProperty("phaseVocoderMix", getPhaseVocoderMix(), nullptr);
+    state.setProperty("compressorMix", getCompressorMix(), nullptr);
+    state.setProperty("roomReverbMix", getRoomReverbMix(), nullptr);
     state.setProperty("transient", getTransient(), nullptr);
     state.setProperty("sustain", getSustain(), nullptr);
     state.setProperty("dynamicResponse", getDynamicResponse(), nullptr);
@@ -535,6 +601,8 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setWireNoiseMix((float) state.getProperty("wireNoiseMix", getWireNoiseMix()));
     setSpectralMix((float) state.getProperty("spectralMix", getSpectralMix()));
     setPhaseVocoderMix((float) state.getProperty("phaseVocoderMix", getPhaseVocoderMix()));
+    setCompressorMix((float) state.getProperty("compressorMix", getCompressorMix()));
+    setRoomReverbMix((float) state.getProperty("roomReverbMix", getRoomReverbMix()));
     setTransient((float) state.getProperty("transient", getTransient()));
     setSustain((float) state.getProperty("sustain", getSustain()));
     setDynamicResponse((float) state.getProperty("dynamicResponse", getDynamicResponse()));
