@@ -84,7 +84,7 @@ private:
 
     };
     std::array<Voice, 16> voices{};
-    std::atomic<int> voiceCount { 8 };
+    std::atomic<int> voiceCount { 7 };
     uint64_t voiceAge = 0;
     double sourceRate=44100.0, outputRate=44100.0, playbackPosition=-1.0;
     float voiceGain=1.0f, playbackRate=1.0f, filterCoefficient=1.0f;
@@ -95,8 +95,8 @@ private:
     float resonatorB0=0.0f, resonatorB1=0.0f, resonatorB2=0.0f;
     float resonatorA1=0.0f, resonatorA2=0.0f;
     float hitVelocity=0.5f;
-    std::atomic<float> bodyMix { 0.35f };
-    std::atomic<float> wireNoiseMix { 0.0f };
+    std::atomic<float> bodyMix { 0.07f };
+    std::atomic<float> wireNoiseMix { 0.08f };
     float hitPitchVariation = 1.0f;
     float hitAttackVariation = 1.0f;
     float hitResonanceVariation = 1.0f;
@@ -104,18 +104,18 @@ private:
     std::atomic<float> spectralMix { 0.0f };
     // Phase-vocoder spectral morphing: a deliberately small STFT layer blended
     // with the direct drum signal. It uses fixed-size, allocation-free state.
-    std::atomic<float> phaseVocoderMix { 0.0f };
+    std::atomic<float> phaseVocoderMix { 1.0f };
     // Living dynamics: the compressor is intentionally a parallel, velocity-aware
     // layer so it brings up body/tail without flattening the hit transient.
-    std::atomic<float> compressorMix { 0.0f };
+    std::atomic<float> compressorMix { 1.0f };
     std::array<float, 2> compressorEnvelope { 0.0f, 0.0f };
     std::array<float, 2> compressorGain { 1.0f, 1.0f };
     // Small fixed Schroeder-style room: several short feedback delays plus
     // cross-channel diffusion. No allocations or locks occur in processBlock.
-    std::atomic<float> roomReverbMix { 0.0f };
+    std::atomic<float> roomReverbMix { 1.0f };
     // Hybrid physical/modal synthesis layer. Default is bypassed so the
     // existing BlackDrum sound is unchanged until the user turns it up.
-    std::atomic<float> physicalSynthMix { 0.0f };
+    std::atomic<float> physicalSynthMix { 1.0f };
     float physicalExciter[2] = { 0.0f, 0.0f };
     float physicalPrev[2] = { 0.0f, 0.0f };
     float physicalMembraneY1[2] = { 0.0f, 0.0f };
@@ -143,11 +143,11 @@ private:
     int pvInputWrite = 0;
     int pvHopCounter = 0;
     uint64_t pvSampleCounter = 0;
-    std::atomic<float> transientAmount { 0.5f };
-    std::atomic<float> sustainAmount { 0.5f };
-    std::atomic<float> dynamicResponse { 0.5f };
+    std::atomic<float> transientAmount { 0.0f };
+    std::atomic<float> sustainAmount { 0.87f };
+    std::atomic<float> dynamicResponse { 0.87f };
     std::atomic<bool> membraneEnabled { false };
-    std::atomic<float> membraneTension { 0.5f }, membraneStiffness { 0.4f }, membraneDecay { 0.5f }, membraneVelocity { 0.6f };
+    std::atomic<float> membraneTension { 0.47f }, membraneStiffness { 1.0f }, membraneDecay { 0.51f }, membraneVelocity { 1.0f };
     float membraneY1[2] = { 0.0f, 0.0f }, membraneY2[2] = { 0.0f, 0.0f };
     float membraneUpperY1[2] = { 0.0f, 0.0f }, membraneUpperY2[2] = { 0.0f, 0.0f };
     float membranePrev[2] = { 0.0f, 0.0f };
