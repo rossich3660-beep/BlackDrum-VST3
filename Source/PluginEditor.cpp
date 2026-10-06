@@ -308,6 +308,19 @@ void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
     g.fillAll(juce::Colour(0xff202326));
     g.setColour(juce::Colour(0xff353a3e));
     g.drawRect(getLocalBounds().reduced(8), 1);
+
+    const float x = (float)getWidth() - 92.0f;
+    const float y = 10.0f;
+    g.setColour(juce::Colours::white);
+    g.fillEllipse(x, y, 72.0f, 28.0f);
+    g.setColour(juce::Colour(0xff202020));
+    g.drawEllipse(x, y, 72.0f, 28.0f, 2.0f);
+    g.drawLine(x, y + 14.0f, x, y + 45.0f, 2.0f);
+    g.drawLine(x + 72.0f, y + 14.0f, x + 72.0f, y + 45.0f, 2.0f);
+    g.drawEllipse(x, y + 32.0f, 72.0f, 20.0f, 2.0f);
+    g.fillEllipse(x + 33.0f, y + 10.0f, 6.0f, 6.0f);
+    for (int i = 0; i < 7; ++i)
+        g.drawLine(x + 8.0f + i * 9.0f, y + 42.0f, x + 5.0f + i * 9.0f, y + 55.0f, 1.0f);
 }
 void BlackDrumAudioProcessorEditor::resized()
 {
