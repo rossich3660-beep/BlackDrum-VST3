@@ -81,10 +81,22 @@ private:
         float membranePrev[2] = { 0.0f, 0.0f };
         float noiseLow[2] = { 0.0f, 0.0f };
         float wirePrev[2] = { 0.0f, 0.0f };
+        static constexpr int snareStringCount = 18;
+        static constexpr int snareStringMaxDelay = 96;
         float collisionEnergy[2] = { 0.0f, 0.0f };
         float collisionEnv[2] = { 0.0f, 0.0f };
         float collisionY1[2][2] = {};
         float collisionY2[2][2] = {};
+        // Eighteen independent virtual snare wires. Each has its own
+        // displacement, velocity, energy, collision gate and delayed impulse.
+        float snareStringDisplacement[snareStringCount][2] = {};
+        float snareStringVelocity[snareStringCount][2] = {};
+        float snareStringEnergy[snareStringCount][2] = {};
+        float snareStringGate[snareStringCount][2] = {};
+        float snareStringPrevMembrane[snareStringCount][2] = {};
+        float snareStringPending[snareStringCount][2] = {};
+        int snareStringDelay[snareStringCount][2] = {};
+        float snareStringNoise[snareStringCount][2] = {};
         float wireY1[3][2] = {};
         float wireY2[3][2] = {};
 
