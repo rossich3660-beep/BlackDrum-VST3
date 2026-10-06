@@ -7,6 +7,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     title.setText("BLACKDRUM", juce::dontSendNotification);
     title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
+    title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     addAndMakeVisible(title);
 
     filename.setText("No sample loaded", juce::dontSendNotification);
@@ -48,7 +49,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     auto setupKnob = [this](juce::Slider& slider, juce::Label& label, const juce::String& text, float initial, std::function<void(float)> setter)
     {
         label.setText(text, juce::dontSendNotification);
-        label.setColour(juce::Label::textColourId, juce::Colours::white);
+        label.setColour(juce::Label::textColourId, juce::Colour(0xffdce5ea));
+        label.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
         label.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(label);
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -56,6 +58,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
         slider.setRange(0.0, 1.0, 0.01);
         slider.setValue(initial, juce::dontSendNotification);
         slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+        slider.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff39434a));
+        slider.setColour(juce::Slider::thumbColourId, juce::Colour(0xffd9f1ff));
         slider.onValueChange = [&slider, setter] { setter((float)slider.getValue()); };
         addAndMakeVisible(slider);
     };
@@ -69,9 +73,11 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     membraneTitle.setText("MEMBRANE MODELING", juce::dontSendNotification);
     membraneTitle.setFont(juce::Font(juce::FontOptions(19.0f, juce::Font::bold)));
     membraneTitle.setColour(juce::Label::textColourId, juce::Colour(0xffd8eaf5));
+    membraneTitle.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
     addAndMakeVisible(membraneTitle);
     membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
-    membraneToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
+    membraneToggle.setColour(juce::ToggleButton::textColourId, juce::Colour(0xffdce5ea));
+    membraneToggle.setColour(juce::ToggleButton::tickColourId, juce::Colour(0xff66bbff));
     membraneToggle.onClick = [this] { processor.setMembraneEnabled(membraneToggle.getToggleState()); };
     addAndMakeVisible(membraneToggle);
     setupKnob(tensionSlider, tensionLabel, "TENSION", processor.getMembraneTension(), [this](float v){ processor.setMembraneTension(v); });
@@ -82,8 +88,10 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     for (auto* b : { &loadButton, &playButton, &removeButton, &savePresetButton, &loadPresetButton })
     {
         addAndMakeVisible(*b);
-        b->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292929));
-        b->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+        b->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff252b2f));
+        b->setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff33414a));
+        b->setColour(juce::TextButton::textColourOffId, juce::Colour(0xffedf7fb));
+        b->setColour(juce::TextButton::textColourOnId, juce::Colours::white);
     }
 
     wireLabel.setText("WIRE NOISE", juce::dontSendNotification);
@@ -95,6 +103,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     wireSlider.setRange(0.0, 1.0, 0.01);
     wireSlider.setValue(processor.getWireNoiseMix(), juce::dontSendNotification);
     wireSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    wireSlider.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff39434a));
+    wireSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xffd9f1ff));
     wireSlider.onValueChange = [this] { processor.setWireNoiseMix((float)wireSlider.getValue()); };
     addAndMakeVisible(wireSlider);
 
@@ -107,6 +117,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     phaseVocoderSlider.setRange(0.0, 1.0, 0.01);
     phaseVocoderSlider.setValue(processor.getPhaseVocoderMix(), juce::dontSendNotification);
     phaseVocoderSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    phaseVocoderSlider.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff39434a));
+    phaseVocoderSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xffd9f1ff));
     phaseVocoderSlider.onValueChange = [this] { processor.setPhaseVocoderMix((float)phaseVocoderSlider.getValue()); };
     addAndMakeVisible(phaseVocoderSlider);
 
@@ -305,9 +317,25 @@ void BlackDrumAudioProcessorEditor::filesDropped(const juce::StringArray& files,
 void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
     // Keep drawing intentionally simple: fewer custom graphics means fewer UI-specific build risks.
-    g.fillAll(juce::Colour(0xff202326));
-    g.setColour(juce::Colour(0xff353a3e));
-    g.drawRect(getLocalBounds().reduced(8), 1);
+    g.fillAll(juce::Colour(0xff111416));
+
+    // Purely visual panels. No DSP/audio state is touched here.
+    auto panel = [&g](juce::Rectangle<float> r, juce::Colour fill, juce::Colour stroke)
+    {
+        g.setColour(fill);
+        g.fillRoundedRectangle(r, 12.0f);
+        g.setColour(stroke);
+        g.drawRoundedRectangle(r, 12.0f, 1.0f);
+    };
+    panel({ 16.0f, 54.0f, 430.0f, 242.0f }, juce::Colour(0xff191d20), juce::Colour(0xff30373b));
+    panel({ 458.0f, 54.0f, 426.0f, 190.0f }, juce::Colour(0xff191d20), juce::Colour(0xff30373b));
+    panel({ 16.0f, 292.0f, 868.0f, 76.0f }, juce::Colour(0xff161a1d), juce::Colour(0xff2b3236));
+    panel({ 16.0f, 376.0f, 868.0f, 174.0f }, juce::Colour(0xff191d20), juce::Colour(0xff30373b));
+
+    g.setColour(juce::Colour(0xff30383d));
+    g.drawLine(32.0f, 45.0f, 868.0f, 45.0f, 1.0f);
+    g.setColour(juce::Colour(0xff66bbff));
+    g.fillRoundedRectangle(32.0f, 43.0f, 90.0f, 3.0f, 1.5f);
 
     const float x = (float)getWidth() - 92.0f;
     const float y = 10.0f;
