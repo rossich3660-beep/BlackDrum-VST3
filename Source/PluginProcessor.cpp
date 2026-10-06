@@ -384,6 +384,17 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                         newVoice.collisionY1[mode][vc] = 0.0f;
                         newVoice.collisionY2[mode][vc] = 0.0f;
                     }
+                    for (int wire = 0; wire < Voice::snareStringCount; ++wire)
+                    {
+                        newVoice.snareStringDisplacement[wire][vc] = 0.0f;
+                        newVoice.snareStringVelocity[wire][vc] = 0.0f;
+                        newVoice.snareStringEnergy[wire][vc] = 0.0f;
+                        newVoice.snareStringGate[wire][vc] = 0.0f;
+                        newVoice.snareStringPrevMembrane[wire][vc] = 0.0f;
+                        newVoice.snareStringPending[wire][vc] = 0.0f;
+                        newVoice.snareStringDelay[wire][vc] = 0;
+                        newVoice.snareStringNoise[wire][vc] = 0.0f;
+                    }
                     for (int mode = 0; mode < 3; ++mode)
                     {
                         newVoice.wireY1[mode][vc] = 0.0f;
@@ -541,52 +552,170 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                     }
                     wire += voiceWire;
 
-                    // Physical snare-wire collision: detect the short membrane edge/contact
-                    // event, build a velocity-dependent contact envelope, then excite two
-                    // heavily damped wire modes. This is deliberately additive and bounded
-                    // so it enriches the hit without replacing the original snare sample.
+                    // Full virtual snare-bed model:
+                    // membrane motion -> 18 individual wire masses -> thresholded
+                    // collisions -> collision energy -> noise gating. The wires are
+                    // deliberately lightweight and dissipative rather than a free-running
+                    // feedback network, so quiet ghost notes can excite them without
+                    // risking runaway energy.
                     if (collisionAmount > 0.0001f)
                     {
-                        const float impactEnergy = std::abs(impact);
-                        const float threshold = 0.006f + 0.024f * (1.0f - vce.velocity);
-                        const float contact = juce::jlimit(0.0f, 1.0f,
-                            (impactEnergy - threshold) / (0.045f + 0.085f * vce.velocity));
-                        const float energyCoeff = contact > vce.collisionEnergy[fc] ? 0.24f : 0.045f;
-                        vce.collisionEnergy[fc] += energyCoeff * (contact - vce.collisionEnergy[fc]);
+                        const float membraneProxy = 0.78f * bright + 0.22f * voiceRaw;
+                        const float membraneVelocity = membraneProxy
+                            - vce.snareStringPrevMembrane[0][fc];
 
-                        const float envCoeff = contact > vce.collisionEnv[fc]
-                            ? (0.20f + 0.12f * vce.velocity)
-                            : (0.028f + 0.018f * vce.velocity);
-                        vce.collisionEnv[fc] += envCoeff * (contact - vce.collisionEnv[fc]);
+                        float stringGateSum = 0.0f;
+                        float stringCollision = 0.0f;
 
-                        const float contactDrive = std::tanh(impact
-                            * (1.0f + 2.6f * vce.velocity))
-                            * vce.collisionEnv[fc]
-                            * (0.45f + 0.55f * vce.collisionEnergy[fc]);
-                        const float collisionFreqs[2] = { 2750.0f, 4650.0f };
-                        const float collisionRadii[2] = { 0.885f, 0.825f };
-                        for (int mode = 0; mode < 2; ++mode)
+                        for (int wireIndex = 0; wireIndex < Voice::snareStringCount; ++wireIndex)
                         {
-                            const float freq = juce::jmin(
-                                collisionFreqs[mode] * (1.0f + 0.075f * vce.velocity), 0.43f * sr);
-                            const float w = 2.0f * juce::MathConstants<float>::pi * freq / sr;
-                            const float r = juce::jlimit(0.76f, 0.93f,
-                                collisionRadii[mode] + 0.018f * vce.velocity);
-                            const float y = contactDrive * (0.014f + 0.020f * vce.velocity)
-                                + 2.0f * r * std::cos(w) * vce.collisionY1[mode][fc]
-                                - r * r * vce.collisionY2[mode][fc];
-                            vce.collisionY2[mode][fc] = vce.collisionY1[mode][fc];
-                            vce.collisionY1[mode][fc] = juce::jlimit(-1.0f, 1.0f, y);
-                            wireCollision += vce.collisionY1[mode][fc]
-                                * (0.035f + 0.040f * vce.velocity)
-                                * vce.collisionEnv[fc]
-                                * std::exp(-(float)vce.position
-                                    / (float)(sourceRate * (0.025f + 0.035f * vce.velocity)));
-                        }
-                    }
-                }
+                            const float p = ((float)wireIndex + 0.5f)
+                                / (float)Voice::snareStringCount;
+                            // Position-dependent coupling approximates the fact that
+                            // different wires sample different membrane modes.
+                            const float spatial = 0.55f
+                                + 0.45f * std::sin(juce::MathConstants<float>::pi * p);
+                            // Deterministic per-wire manufacturing/tension variation.
+                            const float variation = 0.78f
+                                + 0.44f * (float)((wireIndex * 37 + 11) % 101) / 100.0f;
+                            const float sensitivity = variation * (0.82f + 0.36f * vce.velocity);
+                            const float threshold = (0.00045f
+                                + 0.00175f * (1.0f - vce.velocity))
+                                * (1.28f - 0.34f * sensitivity);
 
-                if (voiceLimitForLayers > 1)
+                            float& displacement = vce.snareStringDisplacement[wireIndex][fc];
+                            float& stringVelocity = vce.snareStringVelocity[wireIndex][fc];
+                            float& energy = vce.snareStringEnergy[wireIndex][fc];
+                            float& gate = vce.snareStringGate[wireIndex][fc];
+                            float& pending = vce.snareStringPending[wireIndex][fc];
+                            int& delay = vce.snareStringDelay[wireIndex][fc];
+                            float& noiseState = vce.snareStringNoise[wireIndex][fc];
+
+                            // Each wire sees a slightly different local membrane motion.
+                            const float phaseOffset = vce.phaseMod0
+                                + (float)wireIndex * 0.371f
+                                + (float)vce.position * (0.00007f + 0.000015f * p);
+                            const float localMembrane = membraneProxy
+                                * (spatial * (0.82f + 0.18f * std::sin(phaseOffset)));
+
+                            // A short spring/mass approximation. The damping is deliberately
+                            // strong enough to guarantee that energy decays between contacts.
+                            const float stiffness = 0.018f
+                                + 0.014f * sensitivity
+                                + 0.010f * vce.velocity;
+                            const float damping = 0.070f
+                                + 0.050f * (1.0f - sensitivity * 0.35f)
+                                + 0.025f * (1.0f - vce.velocity);
+                            const float coupling = (0.030f + 0.055f * vce.velocity)
+                                * sensitivity * spatial;
+
+                            const float relativeMotion = localMembrane - displacement;
+                            stringVelocity += coupling * relativeMotion;
+                            stringVelocity *= (1.0f - damping);
+                            displacement += stringVelocity;
+                            displacement = juce::jlimit(-0.045f, 0.045f, displacement);
+
+                            const float relativeVelocity = membraneVelocity * spatial
+                                - stringVelocity;
+                            const float penetration = std::abs(displacement) - threshold;
+
+                            // Contact is one-sided: a wire only "strikes" when it has
+                            // enough displacement and relative velocity. A per-wire
+                            // pseudo-random threshold makes the 18 contacts decorrelate.
+                            if (penetration > 0.0f
+                                && std::abs(relativeVelocity) > (0.00018f + 0.00032f * (1.0f - vce.velocity)))
+                            {
+                                const float collisionVelocity = juce::jlimit(0.0f, 1.0f,
+                                    std::abs(relativeVelocity) * (9.0f + 7.0f * vce.velocity)
+                                    * sensitivity);
+                                const float impulse = juce::jlimit(0.0f, 0.025f,
+                                    penetration * (0.32f + 0.48f * vce.velocity)
+                                    + collisionVelocity * (0.0009f + 0.0018f * vce.velocity));
+
+                                // 0..~2 ms delay per wire. This prevents all wires from
+                                // firing on the same sample and creates a real wire-bed
+                                // spread in time.
+                                const int wireDelay = (wireIndex * 7 + (int)(std::abs(phaseOffset) * 5.0f))
+                                    % juce::jmax(1, Voice::snareStringMaxDelay);
+                                pending = juce::jlimit(0.0f, 0.035f, pending + impulse);
+                                delay = juce::jmax(delay, wireDelay);
+
+                                // Bounce with energy loss: no regenerative feedback.
+                                stringVelocity *= -(0.68f + 0.12f * vce.velocity);
+                                displacement *= 0.72f;
+                            }
+
+                            if (delay > 0)
+                            {
+                                --delay;
+                            }
+                            else if (pending > 0.0f)
+                            {
+                                energy += pending * (0.34f + 0.34f * vce.velocity);
+                                pending = 0.0f;
+                            }
+
+                            // Energy envelope: fast attack, longer but strictly
+                            // decaying release. This is the physical wire response.
+                            const float targetEnergy = juce::jlimit(0.0f, 1.0f,
+                                energy * (20.0f + 14.0f * sensitivity));
+                            const float energyCoeff = targetEnergy > energy
+                                ? 0.22f + 0.10f * vce.velocity
+                                : 0.012f + 0.010f * (1.0f - vce.velocity);
+                            energy += energyCoeff * (targetEnergy - energy);
+                            energy *= 0.9982f + 0.0008f * vce.velocity;
+                            energy = juce::jlimit(0.0f, 1.0f, energy);
+
+                            const float gateTarget = juce::jlimit(0.0f, 1.0f,
+                                energy * (1.20f + 0.55f * vce.velocity)
+                                + std::abs(displacement) * 7.0f);
+                            const float gateCoeff = gateTarget > gate
+                                ? 0.16f + 0.10f * vce.velocity
+                                : 0.010f + 0.008f * (1.0f - vce.velocity);
+                            gate += gateCoeff * (gateTarget - gate);
+                            gate = juce::jlimit(0.0f, 1.0f, gate);
+
+                            // Each virtual wire gets its own bright/noisy resonant response.
+                            const float white = std::sin(
+                                (float)(wireIndex + 1) * 12.9898f
+                                + (float)(vce.position + 1.0) * 78.233f
+                                + phaseOffset * 3.17f);
+                            noiseState += 0.16f * (white - noiseState);
+                            const float wireNoise = white - noiseState;
+                            const float noiseGate = gate * (0.20f + 0.80f * energy);
+                            const float noiseGain = (0.0045f + 0.0095f * vce.velocity)
+                                * sensitivity * noiseGate;
+                            stringCollision += wireNoise * noiseGain;
+
+                            // Short metallic contact impulse. Its frequency and phase vary
+                            // slightly per wire, preventing a single resonant whistle.
+                            const float contactFreq = juce::jmin(
+                                2350.0f + 1850.0f * p + 420.0f * sensitivity
+                                + 520.0f * vce.velocity, 0.43f * sr);
+                            const float contactW = 2.0f
+                                * juce::MathConstants<float>::pi * contactFreq / sr;
+                            const float phase = phaseOffset * 0.003f + p * 0.9f;
+                            const float metallic = std::sin(phase)
+                                * gate * energy * (0.0012f + 0.0028f * vce.velocity);
+                            stringCollision += metallic * std::sin(contactW * (float)vce.position);
+
+                            stringGateSum += gate;
+                        }
+
+                        vce.snareStringPrevMembrane[0][fc] = membraneProxy;
+                        const float averageGate = stringGateSum
+                            / (float)Voice::snareStringCount;
+                        // The old white-noise layer is now physically gated by the
+                        // virtual wire bed. At collision mix = 0 it behaves exactly as
+                        // before; at 100% it becomes collision-driven rather than a
+                        // free-running noise generator.
+                        const float collisionGate = juce::jlimit(0.0f, 1.0f,
+                            0.10f + 1.55f * averageGate);
+                        const float noiseCoupling = (1.0f - collisionAmount)
+                            + collisionAmount * collisionGate;
+                        wire *= noiseCoupling;
+                        wireCollision += stringCollision;
+                    }                if (voiceLimitForLayers > 1)
                 {
                     const float voiceNorm = 1.0f / std::sqrt((float)voiceLimitForLayers);
                     wire *= voiceNorm;
