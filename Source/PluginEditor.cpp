@@ -515,6 +515,8 @@ void BlackDrumAudioProcessorEditor::resized()
 
     title.setBounds(34, 20, 320, 42);
     subtitle.setBounds(38, 62, 460, 22);
+    autoTitle.setBounds(52, 136, 250, 20);
+    autoHint.setBounds(310, 136, 270, 20);
     analysisStatus.setBounds(w - 210, 26, 170, 22);
     sampleLabel.setBounds(w - 500, 58, 300, 22);
 
