@@ -44,18 +44,6 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     bodyMixSlider.onValueChange = [this] { processor.setBodyMix((float)bodyMixSlider.getValue()); };
     addAndMakeVisible(bodyMixSlider);
 
-    spectralLabel.setText("SPECTRAL MIX", juce::dontSendNotification);
-    spectralLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    spectralLabel.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(spectralLabel);
-    spectralSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    spectralSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    spectralSlider.setRange(0.0, 1.0, 0.01);
-    spectralSlider.setValue(processor.getSpectralMix(), juce::dontSendNotification);
-    phaseVocoderSlider.setValue(processor.getPhaseVocoderMix(), juce::dontSendNotification);
-    spectralSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
-    spectralSlider.onValueChange = [this] { processor.setSpectralMix((float)spectralSlider.getValue()); };
-    addAndMakeVisible(spectralSlider);
 
     auto setupKnob = [this](juce::Slider& slider, juce::Label& label, const juce::String& text, float initial, std::function<void(float)> setter)
     {
@@ -236,7 +224,6 @@ void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
                      juce::dontSendNotification);
     voiceCountSlider.setValue(processor.getVoiceCount(), juce::dontSendNotification);
     bodyMixSlider.setValue(processor.getBodyMix(), juce::dontSendNotification);
-    spectralSlider.setValue(processor.getSpectralMix(), juce::dontSendNotification);
     wireSlider.setValue(processor.getWireNoiseMix(), juce::dontSendNotification);
     attackSlider.setValue(processor.getTransient(), juce::dontSendNotification);
     sustainSlider.setValue(processor.getSustain(), juce::dontSendNotification);
@@ -342,7 +329,6 @@ void BlackDrumAudioProcessorEditor::resized()
         slider.setBounds(x + (colW - knobW) / 2 - 4, ky, knobW, knobW);
     };
     place(bodyMixLabel, bodyMixSlider, 0, 0);
-    place(spectralLabel, spectralSlider, 1, 0);
     place(wireLabel, wireSlider, 2, 0);
     place(phaseVocoderLabel, phaseVocoderSlider, 3, 0);
     place(attackLabel, attackSlider, 0, 1);
