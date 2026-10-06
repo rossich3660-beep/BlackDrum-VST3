@@ -714,7 +714,10 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                             + collisionAmount * collisionGate;
                         wire *= noiseCoupling;
                         wireCollision += stringCollision;
-                    }                if (voiceLimitForLayers > 1)
+                    }
+                }
+
+                if (voiceLimitForLayers > 1)
                 {
                     const float voiceNorm = 1.0f / std::sqrt((float)voiceLimitForLayers);
                     wire *= voiceNorm;
