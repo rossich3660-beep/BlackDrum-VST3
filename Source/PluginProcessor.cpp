@@ -619,6 +619,8 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                                 - stringVelocity;
                             const float penetration = std::abs(displacement) - threshold;
 
+                            float collisionKick = 0.0f;
+
                             // Contact is one-sided: a wire only "strikes" when it has
                             // enough displacement and relative velocity. A per-wire
                             // pseudo-random threshold makes the 18 contacts decorrelate.
@@ -628,9 +630,10 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                                 const float collisionVelocity = juce::jlimit(0.0f, 1.0f,
                                     std::abs(relativeVelocity) * (9.0f + 7.0f * vce.velocity)
                                     * sensitivity);
-                                const float impulse = juce::jlimit(0.0f, 0.025f,
-                                    penetration * (0.32f + 0.48f * vce.velocity)
-                                    + collisionVelocity * (0.0009f + 0.0018f * vce.velocity));
+                                const float impulse = juce::jlimit(0.0f, 0.012f,
+                                    penetration * (0.16f + 0.24f * vce.velocity)
+                                    + collisionVelocity * (0.00045f + 0.0009f * vce.velocity));
+                                collisionKick = impulse;
 
                                 // 0..~2 ms delay per wire. This prevents all wires from
                                 // firing on the same sample and creates a real wire-bed
@@ -659,7 +662,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                             // current energy back into itself: that turns the wire bed
                             // into a regenerative feedback loop when the knob is raised.
                             const float collisionInput = juce::jlimit(0.0f, 1.0f,
-                                pending * (18.0f + 10.0f * sensitivity));
+                                collisionKick * (24.0f + 14.0f * sensitivity));
                             const float energyAttack = 0.18f + 0.08f * vce.velocity;
                             const float energyRelease = 0.010f + 0.006f * (1.0f - vce.velocity);
                             energy += energyAttack * collisionInput;
