@@ -458,7 +458,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
 
             // Lightweight spectral resynthesis-inspired layer: split the source into
             // low tonal body, high-frequency residual and transient difference.
-            const float specAmount = spectralMix.load();
+            const float specAmount = 0.0f;
             spectralLow[fc] += 0.075f * (raw - spectralLow[fc]);
             const float tonal = spectralLow[fc];
             const float residual = raw - tonal;
@@ -657,7 +657,7 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("voiceCount", getVoiceCount(), nullptr);
     state.setProperty("bodyMix", getBodyMix(), nullptr);
     state.setProperty("wireNoiseMix", getWireNoiseMix(), nullptr);
-    state.setProperty("spectralMix", getSpectralMix(), nullptr);
+    state.setProperty("spectralMix", 0.0f, nullptr);
     state.setProperty("phaseVocoderMix", getPhaseVocoderMix(), nullptr);
     state.setProperty("compressorMix", getCompressorMix(), nullptr);
     state.setProperty("roomReverbMix", getRoomReverbMix(), nullptr);
@@ -686,7 +686,7 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setVoiceCount((int) state.getProperty("voiceCount", getVoiceCount()));
     setBodyMix((float) state.getProperty("bodyMix", getBodyMix()));
     setWireNoiseMix((float) state.getProperty("wireNoiseMix", getWireNoiseMix()));
-    setSpectralMix((float) state.getProperty("spectralMix", getSpectralMix()));
+    setSpectralMix(0.0f);
     setPhaseVocoderMix((float) state.getProperty("phaseVocoderMix", getPhaseVocoderMix()));
     setCompressorMix((float) state.getProperty("compressorMix", getCompressorMix()));
     setRoomReverbMix((float) state.getProperty("roomReverbMix", getRoomReverbMix()));
