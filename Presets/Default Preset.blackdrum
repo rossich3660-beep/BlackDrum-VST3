@@ -2,7 +2,7 @@
 <BlackDrumState version="3" samplePath=""
                 voiceCount="7" bodyMix="0.07000000029802322" wireNoiseMix="0.07999999821186066"
                 spectralMix="0.0" phaseVocoderMix="1.0" compressorMix="1.0" roomReverbMix="1.0"
-                physicalSynthMix="1.0" transient="0.0" sustain="0.8700000047683716"
+                physicalSynthMix="1.0" wireCollisionMix="0.35" transient="0.0" sustain="0.8700000047683716"
                 dynamicResponse="0.8700000047683716" membraneEnabled="1" membraneTension="0.4699999988079071"
                 membraneStiffness="1.0" membraneDecay="0.5099999904632568" membraneVelocity="1.0"
                 presetName="Default Preset"/>
