@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <cmath>
+#include "SampleAnalyzer.h"
 
 BlackDrumAudioProcessor::BlackDrumAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
@@ -215,12 +216,15 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 hitResonanceVariation = 1.0f + nextRandom() * (0.04f + 0.06f * v);
                 hitNoiseVariation = 1.0f + nextRandom() * (0.10f + 0.12f * v);
                 const float response = dynamicResponse.load();
-                const float exponent = 1.8f - 1.25f * response;
+                const float autoCurve = autoVelocityCurve.load();
+                const float exponent = juce::jlimit(0.45f, 2.0f, 1.8f - 1.25f * response - 0.55f * autoCurve);
                 const float shapedVelocity = std::pow(v, exponent);
                 voiceGain = 0.12f + 0.88f * shapedVelocity * shapedVelocity;
                 // Small pitch variation plus a brighter low-pass response for harder hits.
-                playbackRate = (float)(sourceRate / outputRate) * (0.992f + 0.032f * std::pow(v, 1.8f - 1.25f * dynamicResponse.load())) * hitPitchVariation;
-                const float cutoff = 1400.0f + std::pow(v, 1.8f - 1.25f * dynamicResponse.load()) * 14400.0f;
+                playbackRate = (float)(sourceRate / outputRate) * (0.992f + 0.032f * std::pow(v, 1.8f - 1.25f * dynamicResponse.load()))
+                    * (1.0f - autoPitchDrop.load() * 0.025f * (1.0f - v)) * hitPitchVariation;
+                const float cutoff = 1400.0f + std::pow(v, 1.8f - 1.25f * dynamicResponse.load()) * 14400.0f
+                    * (0.75f + 0.85f * autoBrightness.load());
                 filterCoefficient = 1.0f - std::exp(-2.0f * juce::MathConstants<float>::pi * cutoff / sr);
                 // Allocate a voice within the configured limit. Prefer an idle slot;
                 // otherwise steal the oldest active voice, with no audio-thread allocation.
@@ -295,9 +299,15 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         // A short velocity-scaled transient lift; decays smoothly over the first ~35 ms.
         const float attackControl = (transientAmount.load() - 0.5f) * 1.4f;
         const float sustainControl = (sustainAmount.load() - 0.5f) * 1.2f;
-        const float attackAmount = (0.04f + 0.24f * velocity + attackControl * 0.20f) * hitAttackVariation;
+        const float attackSoftening = autoAttackSoftening.load();
+        const float snapBoost = autoSnap.load() * velocity * velocity * 0.18f;
+        const float attackAmount = (0.04f + 0.24f * velocity + snapBoost
+            + attackControl * 0.20f) * hitAttackVariation
+            * (1.0f - attackSoftening * (1.0f - velocity) * 0.35f);
         const float transient = juce::jmax(0.05f, 1.0f + attackAmount * std::exp(-elapsed * 3.2f));
-        const float tailShape = juce::jlimit(0.35f, 1.8f, 1.0f + sustainControl * (1.0f - std::exp(-elapsed * 2.5f)));
+        const float autoTail = std::exp(-elapsed * autoTailShorten.load() * (1.0f - velocity) * 1.6f);
+        const float tailShape = juce::jlimit(0.35f, 1.8f,
+            (1.0f + sustainControl * (1.0f - std::exp(-elapsed * 2.5f))) * autoTail);
         // Harder strikes excite slightly more modeled body, kept deliberately subtle.
         const float resonanceMix = juce::jlimit(0.0f, 1.0f, bodyMix.load() * hitResonanceVariation);
 
@@ -351,7 +361,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             // Each active voice gets its own noise stream and phase. This prevents
             // repeated MIDI hits from sharing an identical noise waveform.
             float wire = 0.0f;
-            const float wireAmount = wireNoiseMix.load();
+            const float wireAmount = wireNoiseMix.load() * (0.35f + 0.65f * autoNoise.load());
             const int voiceLimitForLayers = juce::jlimit(1, 16, voiceCount.load());
             if (wireAmount > 0.0001f)
             {
@@ -524,9 +534,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const float phaseVocoder = processPhaseVocoder(
                 spectralOut, phaseVocoderMix.load(),
                 juce::jlimit(0.0f, 1.0f, hitVelocity));
+            const float autoBody = 1.0f + autoBodyBoost.load() * velocity * 0.22f;
+            const float saturationDrive = 1.0f + autoSaturation.load() * velocity * 0.8f;
             out.setSample(ch, i, std::tanh(
-                spectralOut * tailShape + wire + membrane
-                + phaseVocoder * phaseVocoderMix.load() * 0.85f + shell));
+                (spectralOut * tailShape * autoBody + wire + membrane
+                + phaseVocoder * phaseVocoderMix.load() * 0.85f + shell) * saturationDrive));
         }
         const int activeLimit = juce::jlimit(1, 16, voiceCount.load());
         for (int vi = 0; vi < activeLimit; ++vi)
@@ -548,7 +560,7 @@ juce::AudioProcessorEditor* BlackDrumAudioProcessor::createEditor()
 juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
 {
     juce::ValueTree state("BlackDrumState");
-    state.setProperty("version", 3, nullptr);
+    state.setProperty("version", 4, nullptr);
     state.setProperty("samplePath", loadedFile.getFullPathName(), nullptr);
     state.setProperty("voiceCount", getVoiceCount(), nullptr);
     state.setProperty("bodyMix", getBodyMix(), nullptr);
@@ -564,6 +576,28 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("membraneStiffness", getMembraneStiffness(), nullptr);
     state.setProperty("membraneDecay", getMembraneDecay(), nullptr);
     state.setProperty("membraneVelocity", getMembraneVelocity(), nullptr);
+    state.setProperty("autoBrightness", autoBrightness.load(), nullptr);
+    state.setProperty("autoSnap", autoSnap.load(), nullptr);
+    state.setProperty("autoNoise", autoNoise.load(), nullptr);
+    state.setProperty("autoAttackSoftening", autoAttackSoftening.load(), nullptr);
+    state.setProperty("autoTailShorten", autoTailShorten.load(), nullptr);
+    state.setProperty("autoPitchDrop", autoPitchDrop.load(), nullptr);
+    state.setProperty("autoSaturation", autoSaturation.load(), nullptr);
+    state.setProperty("autoBodyBoost", autoBodyBoost.load(), nullptr);
+    state.setProperty("autoVelocityCurve", autoVelocityCurve.load(), nullptr);
+    state.setProperty("manualAutoEdits", manualAutoEdits.load(), nullptr);
+    state.setProperty("featureDurationMs", sampleFeatures.durationMs, nullptr);
+    state.setProperty("featureAttackMs", sampleFeatures.attackMs, nullptr);
+    state.setProperty("featureDecayT60Ms", sampleFeatures.decayT60Ms, nullptr);
+    state.setProperty("featureTailEnergyRatio", sampleFeatures.tailEnergyRatio, nullptr);
+    state.setProperty("featureCentroidHz", sampleFeatures.centroidHz, nullptr);
+    state.setProperty("featureBodyEnergy", sampleFeatures.bodyEnergy, nullptr);
+    state.setProperty("featureSnapEnergy", sampleFeatures.snapEnergy, nullptr);
+    state.setProperty("featureAirEnergy", sampleFeatures.airEnergy, nullptr);
+    state.setProperty("featureFundamentalHz", sampleFeatures.fundamentalHz, nullptr);
+    state.setProperty("featureToneToNoise", sampleFeatures.toneToNoise, nullptr);
+    state.setProperty("featureRingAmount", sampleFeatures.ringAmount, nullptr);
+    state.setProperty("featureCrestFactorDb", sampleFeatures.crestFactorDb, nullptr);
     return state;
 }
 
@@ -591,6 +625,28 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setMembraneStiffness((float) state.getProperty("membraneStiffness", getMembraneStiffness()));
     setMembraneDecay((float) state.getProperty("membraneDecay", getMembraneDecay()));
     setMembraneVelocity((float) state.getProperty("membraneVelocity", getMembraneVelocity()));
+    autoBrightness.store(autoClamp((float)state.getProperty("autoBrightness", autoBrightness.load())));
+    autoSnap.store(autoClamp((float)state.getProperty("autoSnap", autoSnap.load())));
+    autoNoise.store(autoClamp((float)state.getProperty("autoNoise", autoNoise.load())));
+    autoAttackSoftening.store(autoClamp((float)state.getProperty("autoAttackSoftening", autoAttackSoftening.load())));
+    autoTailShorten.store(autoClamp((float)state.getProperty("autoTailShorten", autoTailShorten.load())));
+    autoPitchDrop.store(autoClamp((float)state.getProperty("autoPitchDrop", autoPitchDrop.load())));
+    autoSaturation.store(autoClamp((float)state.getProperty("autoSaturation", autoSaturation.load())));
+    autoBodyBoost.store(autoClamp((float)state.getProperty("autoBodyBoost", autoBodyBoost.load())));
+    autoVelocityCurve.store(autoClamp((float)state.getProperty("autoVelocityCurve", autoVelocityCurve.load())));
+    manualAutoEdits.store((bool)state.getProperty("manualAutoEdits", false));
+    sampleFeatures.durationMs = (float)state.getProperty("featureDurationMs", 0.0f);
+    sampleFeatures.attackMs = (float)state.getProperty("featureAttackMs", 0.0f);
+    sampleFeatures.decayT60Ms = (float)state.getProperty("featureDecayT60Ms", 0.0f);
+    sampleFeatures.tailEnergyRatio = autoClamp((float)state.getProperty("featureTailEnergyRatio", 0.0f));
+    sampleFeatures.centroidHz = (float)state.getProperty("featureCentroidHz", 0.0f);
+    sampleFeatures.bodyEnergy = autoClamp((float)state.getProperty("featureBodyEnergy", 0.0f));
+    sampleFeatures.snapEnergy = autoClamp((float)state.getProperty("featureSnapEnergy", 0.0f));
+    sampleFeatures.airEnergy = autoClamp((float)state.getProperty("featureAirEnergy", 0.0f));
+    sampleFeatures.fundamentalHz = (float)state.getProperty("featureFundamentalHz", 0.0f);
+    sampleFeatures.toneToNoise = autoClamp((float)state.getProperty("featureToneToNoise", 0.0f));
+    sampleFeatures.ringAmount = autoClamp((float)state.getProperty("featureRingAmount", 0.0f));
+    sampleFeatures.crestFactorDb = (float)state.getProperty("featureCrestFactorDb", 0.0f);
 
     const auto path = state.getProperty("samplePath").toString();
     if (path.isNotEmpty())
