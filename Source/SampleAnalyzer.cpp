@@ -253,7 +253,7 @@ SampleFeatures SampleAnalyzer::analyze(const juce::AudioBuffer<float>& mono, dou
 
     std::vector<float> band;
     for (int k = juce::jmax(1, (int)std::floor(200.0 * fftSize / sampleRate));
-         k <= juce::min(fftSize / 2, (int)std::ceil(1500.0 * fftSize / sampleRate)); ++k)
+         k <= juce::jmin(fftSize / 2, (int)std::ceil(1500.0 * fftSize / sampleRate)); ++k)
         band.push_back(first80Power[(size_t)k]);
     if (!band.empty())
     {
