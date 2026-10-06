@@ -561,9 +561,6 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                     if (collisionAmount > 0.0001f)
                     {
                         const float membraneProxy = 0.78f * bright + 0.22f * voiceRaw;
-                        const float membraneVelocity = membraneProxy
-                            - vce.snareStringPrevMembrane[0][fc];
-
                         float stringGateSum = 0.0f;
                         float stringCollision = 0.0f;
 
@@ -597,6 +594,9 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                                 + (float)vce.position * (0.00007f + 0.000015f * p);
                             const float localMembrane = membraneProxy
                                 * (spatial * (0.82f + 0.18f * std::sin(phaseOffset)));
+                            const float membraneVelocity = localMembrane
+                                - vce.snareStringPrevMembrane[wireIndex][fc];
+                            vce.snareStringPrevMembrane[wireIndex][fc] = localMembrane;
 
                             // A short spring/mass approximation. The damping is deliberately
                             // strong enough to guarantee that energy decays between contacts.
@@ -702,7 +702,6 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                             stringGateSum += gate;
                         }
 
-                        vce.snareStringPrevMembrane[0][fc] = membraneProxy;
                         const float averageGate = stringGateSum
                             / (float)Voice::snareStringCount;
                         // The old white-noise layer is now physically gated by the
