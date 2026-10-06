@@ -655,16 +655,16 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                                 pending = 0.0f;
                             }
 
-                            // Energy envelope: fast attack, longer but strictly
-                            // decaying release. This is the physical wire response.
-                            const float targetEnergy = juce::jlimit(0.0f, 1.0f,
-                                energy * (20.0f + 14.0f * sensitivity));
-                            const float energyCoeff = targetEnergy > energy
-                                ? 0.22f + 0.10f * vce.velocity
-                                : 0.012f + 0.010f * (1.0f - vce.velocity);
-                            energy += energyCoeff * (targetEnergy - energy);
-                            energy *= 0.9982f + 0.0008f * vce.velocity;
-                            energy = juce::jlimit(0.0f, 1.0f, energy);
+                            // Stable collision-energy envelope.  Do not feed the
+                            // current energy back into itself: that turns the wire bed
+                            // into a regenerative feedback loop when the knob is raised.
+                            const float collisionInput = juce::jlimit(0.0f, 1.0f,
+                                pending * (18.0f + 10.0f * sensitivity));
+                            const float energyAttack = 0.18f + 0.08f * vce.velocity;
+                            const float energyRelease = 0.010f + 0.006f * (1.0f - vce.velocity);
+                            energy += energyAttack * collisionInput;
+                            energy *= (1.0f - energyRelease);
+                            energy = juce::jlimit(0.0f, 0.65f, energy);
 
                             const float gateTarget = juce::jlimit(0.0f, 1.0f,
                                 energy * (1.20f + 0.55f * vce.velocity)
