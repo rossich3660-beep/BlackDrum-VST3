@@ -4,6 +4,15 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     : AudioProcessorEditor(&p), processor(p)
 {
     setSize(900, 570);
+
+    for (auto* tab : { &mainTabButton, &livePhysicsTabButton })
+    {
+        addAndMakeVisible(*tab);
+        tab->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292929));
+        tab->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    }
+    mainTabButton.onClick = [this] { setLivePhysicsTab(false); };
+    livePhysicsTabButton.onClick = [this] { setLivePhysicsTab(true); }
     title.setText("BLACKDRUM", juce::dontSendNotification);
     title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -66,6 +75,37 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
     setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
 
+    livePhysicsTitle.setText("LIVE SNARE PHYSICS", juce::dontSendNotification);
+    livePhysicsTitle.setFont(juce::Font(juce::FontOptions(21.0f, juce::Font::bold)));
+    livePhysicsTitle.setColour(juce::Label::textColourId, juce::Colour(0xffd8eaf5));
+    addAndMakeVisible(livePhysicsTitle);
+    livePhysicsHint.setText("Coupled wire collisions, impact position, pitch kick, stochastic variation and hit-to-hit energy memory.", juce::dontSendNotification);
+    livePhysicsHint.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
+    livePhysicsHint.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(livePhysicsHint);
+
+    auto setupLiveKnob = [this](juce::Slider& slider, juce::Label& label, const juce::String& text, float initial, std::function<void(float)> setter)
+    {
+        label.setText(text, juce::dontSendNotification);
+        label.setColour(juce::Label::textColourId, juce::Colours::white);
+        label.setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(label);
+        slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+        slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        slider.setRange(0.0, 1.0, 0.01);
+        slider.setValue(initial, juce::dontSendNotification);
+        slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+        slider.onValueChange = [&slider, setter] { setter((float)slider.getValue()); };
+        addAndMakeVisible(slider);
+    };
+    setupLiveKnob(liveMixSlider, liveMixLabel, "PHYSICS MIX", processor.getLivePhysicsMix(), [this](float v){ processor.setLivePhysicsMix(v); });
+    setupLiveKnob(collisionSlider, collisionLabel, "WIRE COLLISION", processor.getWireCollision(), [this](float v){ processor.setWireCollision(v); });
+    setupLiveKnob(couplingSlider, couplingLabel, "MEMBRANE COUPLING", processor.getMembraneCoupling(), [this](float v){ processor.setMembraneCoupling(v); });
+    setupLiveKnob(positionSlider, positionLabel, "HIT POSITION", processor.getHitPosition(), [this](float v){ processor.setHitPosition(v); });
+    setupLiveKnob(pitchKickSlider, pitchKickLabel, "PITCH KICK", processor.getPitchKick(), [this](float v){ processor.setPitchKick(v); });
+    setupLiveKnob(randomnessSlider, randomnessLabel, "RANDOMNESS", processor.getLiveRandomness(), [this](float v){ processor.setLiveRandomness(v); });
+    setupLiveKnob(memorySlider, memoryLabel, "ENERGY MEMORY", processor.getEnergyMemory(), [this](float v){ processor.setEnergyMemory(v); });
+
     membraneTitle.setText("MEMBRANE MODELING", juce::dontSendNotification);
     membraneTitle.setFont(juce::Font(juce::FontOptions(19.0f, juce::Font::bold)));
     membraneTitle.setColour(juce::Label::textColourId, juce::Colour(0xffd8eaf5));
@@ -78,6 +118,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     setupKnob(stiffnessSlider, stiffnessLabel, "STIFFNESS", processor.getMembraneStiffness(), [this](float v){ processor.setMembraneStiffness(v); });
     setupKnob(decaySlider, decayLabel, "DECAY", processor.getMembraneDecay(), [this](float v){ processor.setMembraneDecay(v); });
     setupKnob(velocitySlider, velocityLabel, "VELOCITY SENS", processor.getMembraneVelocity(), [this](float v){ processor.setMembraneVelocity(v); });
+
+    setLivePhysicsTab(false);
 
     for (auto* b : { &loadButton, &playButton, &removeButton, &savePresetButton, &loadPresetButton })
     {
@@ -231,6 +273,13 @@ void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
     compressorSlider.setValue(processor.getCompressorMix(), juce::dontSendNotification);
     roomReverbSlider.setValue(processor.getRoomReverbMix(), juce::dontSendNotification);
     physicalSynthSlider.setValue(processor.getPhysicalSynthMix(), juce::dontSendNotification);
+    liveMixSlider.setValue(processor.getLivePhysicsMix(), juce::dontSendNotification);
+    collisionSlider.setValue(processor.getWireCollision(), juce::dontSendNotification);
+    couplingSlider.setValue(processor.getMembraneCoupling(), juce::dontSendNotification);
+    positionSlider.setValue(processor.getHitPosition(), juce::dontSendNotification);
+    pitchKickSlider.setValue(processor.getPitchKick(), juce::dontSendNotification);
+    randomnessSlider.setValue(processor.getLiveRandomness(), juce::dontSendNotification);
+    memorySlider.setValue(processor.getEnergyMemory(), juce::dontSendNotification);
     membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
     tensionSlider.setValue(processor.getMembraneTension(), juce::dontSendNotification);
     stiffnessSlider.setValue(processor.getMembraneStiffness(), juce::dontSendNotification);
@@ -302,6 +351,42 @@ void BlackDrumAudioProcessorEditor::filesDropped(const juce::StringArray& files,
     }
 }
 
+void BlackDrumAudioProcessorEditor::setLivePhysicsTab(bool enabled)
+{
+    livePhysicsTab = enabled;
+    const bool main = !enabled;
+    auto setMain = [main](juce::Component& c) { c.setVisible(main); };
+    for (auto* c : { static_cast<juce::Component*>(&voiceCountLabel), static_cast<juce::Component*>(&voiceCountSlider),
+                     static_cast<juce::Component*>(&bodyMixLabel), static_cast<juce::Component*>(&bodyMixSlider),
+                     static_cast<juce::Component*>(&wireLabel), static_cast<juce::Component*>(&wireSlider),
+                     static_cast<juce::Component*>(&phaseVocoderLabel), static_cast<juce::Component*>(&phaseVocoderSlider),
+                     static_cast<juce::Component*>(&attackLabel), static_cast<juce::Component*>(&attackSlider),
+                     static_cast<juce::Component*>(&sustainLabel), static_cast<juce::Component*>(&sustainSlider),
+                     static_cast<juce::Component*>(&dynamicLabel), static_cast<juce::Component*>(&dynamicSlider),
+                     static_cast<juce::Component*>(&membraneTitle), static_cast<juce::Component*>(&membraneToggle),
+                     static_cast<juce::Component*>(&tensionLabel), static_cast<juce::Component*>(&tensionSlider),
+                     static_cast<juce::Component*>(&stiffnessLabel), static_cast<juce::Component*>(&stiffnessSlider),
+                     static_cast<juce::Component*>(&decayLabel), static_cast<juce::Component*>(&decaySlider),
+                     static_cast<juce::Component*>(&velocityLabel), static_cast<juce::Component*>(&velocitySlider),
+                     static_cast<juce::Component*>(&compressorLabel), static_cast<juce::Component*>(&compressorSlider),
+                     static_cast<juce::Component*>(&roomReverbLabel), static_cast<juce::Component*>(&roomReverbSlider),
+                     static_cast<juce::Component*>(&physicalSynthLabel), static_cast<juce::Component*>(&physicalSynthSlider),
+                     static_cast<juce::Component*>(&savePresetButton), static_cast<juce::Component*>(&loadPresetButton) })
+        setMain(*c);
+    }
+    livePhysicsTitle.setVisible(enabled);
+    livePhysicsHint.setVisible(enabled);
+    for (auto* c : { static_cast<juce::Component*>(&liveMixLabel), static_cast<juce::Component*>(&liveMixSlider),
+                     static_cast<juce::Component*>(&collisionLabel), static_cast<juce::Component*>(&collisionSlider),
+                     static_cast<juce::Component*>(&couplingLabel), static_cast<juce::Component*>(&couplingSlider),
+                     static_cast<juce::Component*>(&positionLabel), static_cast<juce::Component*>(&positionSlider),
+                     static_cast<juce::Component*>(&pitchKickLabel), static_cast<juce::Component*>(&pitchKickSlider),
+                     static_cast<juce::Component*>(&randomnessLabel), static_cast<juce::Component*>(&randomnessSlider),
+                     static_cast<juce::Component*>(&memoryLabel), static_cast<juce::Component*>(&memorySlider) })
+        c->setVisible(enabled);
+    repaint();
+}
+
 void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
     // Keep drawing intentionally simple: fewer custom graphics means fewer UI-specific build risks.
@@ -313,6 +398,8 @@ void BlackDrumAudioProcessorEditor::resized()
 {
     const int margin = 20;
     title.setBounds(margin, 12, 240, 36);
+    mainTabButton.setBounds(560, 14, 120, 30);
+    livePhysicsTabButton.setBounds(688, 14, 180, 30);
 
     // Main processing controls: two compact rows, with labels kept separate from knobs.
     const int knobW = 64;
