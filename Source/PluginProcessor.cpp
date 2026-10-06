@@ -23,6 +23,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     for (auto& ch : roomDelayBuffer) ch.fill(0.0f);
     roomWritePositions.fill(0);
     roomDampingState[0] = roomDampingState[1] = 0.0f;
+    roomInputState[0] = roomInputState[1] = 0.0f;
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -169,8 +170,18 @@ float BlackDrumAudioProcessor::processRoomReverb(float input, int channel, float
 
     const int ch = juce::jlimit(0, 1, channel);
     float wet = 0.0f;
-    const float feedback = 0.72f + 0.10f * mix + 0.05f * velocity;
-    const float damping = 0.16f + 0.18f * (1.0f - mix);
+
+    // The previous implementation injected the same feedback state into all
+    // four delay lines. That can become effectively regenerative at high mix.
+    // Keep the room strictly decaying: feedback is capped well below unity and
+    // is applied only to the delayed sample, never to the current input.
+    const float feedback = juce::jlimit(0.0f, 0.68f, 0.52f + 0.12f * mix + 0.04f * velocity);
+    const float damping = 0.22f + 0.20f * (1.0f - mix);
+    const float inputSlew = 0.035f + 0.025f * mix;
+
+    // Smooth the excitation so changing the knob cannot inject a discontinuity.
+    roomInputState[(size_t)ch] += inputSlew * (input - roomInputState[(size_t)ch]);
+    const float excitation = juce::jlimit(-1.0f, 1.0f, roomInputState[(size_t)ch]);
 
     for (int m = 0; m < roomDelayCount; ++m)
     {
@@ -178,19 +189,21 @@ float BlackDrumAudioProcessor::processRoomReverb(float input, int channel, float
         const int delay = roomDelayLengths[(size_t)m];
         const int readPos = (wp - delay + roomMaxDelay) % roomMaxDelay;
         const float delayed = roomDelayBuffer[(size_t)ch][(size_t)readPos];
-        const float diffused = delayed - roomDampingState[(size_t)ch];
-        roomDampingState[(size_t)ch] += damping * diffused;
-        const float injection = input + 0.22f * roomDampingState[(size_t)ch];
+
+        // One-pole damping in the feedback path guarantees progressive energy loss.
+        roomDampingState[(size_t)ch] += damping * (delayed - roomDampingState[(size_t)ch]);
+        const float reflected = roomDampingState[(size_t)ch];
         roomDelayBuffer[(size_t)ch][(size_t)wp] =
-            injection + roomDampingState[(size_t)ch] * feedback * 0.42f;
-        wet += roomDampingState[(size_t)ch] * (0.18f + 0.04f * (float)m);
+            excitation * 0.72f + reflected * feedback;
+
+        wet += reflected * (0.16f + 0.035f * (float)m);
         wp = (wp + 1) % roomMaxDelay;
     }
 
-    // A little velocity-dependent early reflection emphasis makes harder hits
-    // feel closer/larger rather than simply louder.
+    // Gentle velocity shaping: harder hits feel closer without creating a long tail.
     const float roomShape = 0.55f + 0.45f * velocity;
-    return wet * mix * roomShape;
+    const float safety = 0.72f - 0.20f * mix;
+    return juce::jlimit(-0.35f, 0.35f, wet * mix * roomShape * safety);
 }
 
 bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
