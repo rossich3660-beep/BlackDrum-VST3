@@ -77,6 +77,7 @@ private:
     {
         bool active = false;
         double age = 0.0;
+        uint32_t lifeSamples = 0;
         float velocity = 0.5f;
         float phase = 0.0f;
         float envelope = 0.0f;
@@ -88,7 +89,7 @@ private:
         std::array<float, 8> modeY2 {};
         std::array<float, 4> shellY1 {};
         std::array<float, 4> shellY2 {};
-        float wire1 = 0.0f, wire2 = 0.0f, wire3 = 0.0f;
+        float wire1 = 0.0f, wire2 = 0.0f, wire3 = 0.0f, wire4 = 0.0f;
         float exciter = 0.0f;
     };
 
