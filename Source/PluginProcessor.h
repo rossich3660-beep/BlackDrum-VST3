@@ -116,6 +116,7 @@ private:
     std::array<int, roomDelayCount> roomDelayLengths { 1499, 1877, 2333, 2861 };
     std::array<int, roomDelayCount> roomWritePositions { 0, 0, 0, 0 };
     std::array<float, 2> roomDampingState { 0.0f, 0.0f };
+    std::array<float, 2> roomInputState { 0.0f, 0.0f };
     static constexpr int pvFFTSize = 1024;
     static constexpr int pvHopSize = 128;
     static constexpr int pvBins = pvFFTSize / 2 + 1;
