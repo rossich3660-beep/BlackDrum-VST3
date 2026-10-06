@@ -71,6 +71,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
         slider.onValueChange = [&slider, setter] { setter((float)slider.getValue()); };
         addAndMakeVisible(slider);
     };
+    setupKnob(compressorSlider, compressorLabel, "COMPRESSOR", processor.getCompressorMix(), [this](float v){ processor.setCompressorMix(v); });
+    setupKnob(roomReverbSlider, roomReverbLabel, "ROOM REVERB", processor.getRoomReverbMix(), [this](float v){ processor.setRoomReverbMix(v); });
     setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
     setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
     setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
@@ -238,6 +240,8 @@ void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
     attackSlider.setValue(processor.getTransient(), juce::dontSendNotification);
     sustainSlider.setValue(processor.getSustain(), juce::dontSendNotification);
     dynamicSlider.setValue(processor.getDynamicResponse(), juce::dontSendNotification);
+    compressorSlider.setValue(processor.getCompressorMix(), juce::dontSendNotification);
+    roomReverbSlider.setValue(processor.getRoomReverbMix(), juce::dontSendNotification);
     membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
     tensionSlider.setValue(processor.getMembraneTension(), juce::dontSendNotification);
     stiffnessSlider.setValue(processor.getMembraneStiffness(), juce::dontSendNotification);
@@ -363,6 +367,12 @@ void BlackDrumAudioProcessorEditor::resized()
     loadButton.setBounds(120, 390, 170, 36);
     playButton.setBounds(365, 390, 170, 36);
     removeButton.setBounds(610, 390, 170, 36);
-    savePresetButton.setBounds(190, 455, 220, 36);
-    loadPresetButton.setBounds(490, 455, 220, 36);
+    // Living controls stay together in the lower-left area and have their own
+    // row, so they cannot overlap the existing processing controls.
+    compressorLabel.setBounds(24, 430, 112, 20);
+    compressorSlider.setBounds(48, 450, 64, 64);
+    roomReverbLabel.setBounds(148, 430, 112, 20);
+    roomReverbSlider.setBounds(172, 450, 64, 64);
+    savePresetButton.setBounds(330, 455, 220, 36);
+    loadPresetButton.setBounds(590, 455, 220, 36);
 }
