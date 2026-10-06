@@ -55,6 +55,8 @@ public:
     float getCompressorMix() const { return compressorMix.load(); }
     void setRoomReverbMix(float v) { roomReverbMix.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getRoomReverbMix() const { return roomReverbMix.load(); }
+    void setPhysicalSynthMix(float v) { physicalSynthMix.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getPhysicalSynthMix() const { return physicalSynthMix.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
 
@@ -111,6 +113,15 @@ private:
     // Small fixed Schroeder-style room: several short feedback delays plus
     // cross-channel diffusion. No allocations or locks occur in processBlock.
     std::atomic<float> roomReverbMix { 0.0f };
+    // Hybrid physical/modal synthesis layer. Default is bypassed so the
+    // existing BlackDrum sound is unchanged until the user turns it up.
+    std::atomic<float> physicalSynthMix { 0.0f };
+    float physicalExciter[2] = { 0.0f, 0.0f };
+    float physicalPrev[2] = { 0.0f, 0.0f };
+    float physicalMembraneY1[2] = { 0.0f, 0.0f };
+    float physicalMembraneY2[2] = { 0.0f, 0.0f };
+    float physicalShellY1[3][2] = {};
+    float physicalShellY2[3][2] = {};
     static constexpr int roomDelayCount = 4;
     static constexpr int roomMaxDelay = 4096;
     std::array<std::array<float, roomMaxDelay>, 2> roomDelayBuffer {};
@@ -150,5 +161,6 @@ private:
     void resetPhaseVocoder();
     float processPhaseVocoder(float input, float morphAmount, float velocity);
     float processRoomReverb(float input, int channel, float velocity);
+    float processPhysicalSynth(float input, int channel, float velocity);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
