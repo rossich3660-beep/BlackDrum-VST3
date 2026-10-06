@@ -291,20 +291,7 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int)
                            v.shellY1[(size_t) m], v.shellY2[(size_t) m], outputRate) * gain;
     }
 
-    const float wireExciter = 0.62f * bottom + 0.38f * exciter
-        + white * (0.22f + 0.40f * velocityCurve) * (0.35f + 0.65f * refEnv);
-
-    const float wireFreq = 1500.0f + 3800.0f * wireT + 900.0f * referenceHigh;
-    const float wireRadius = juce::jlimit(0.70f, 0.991f,
-        0.966f + 0.026f * wireT - 0.052f * wireD);
-
-    const float wireA = resonator(wireExciter, wireFreq, wireRadius,
-                                  v.wire1, v.wire2, outputRate);
-    const float wireB = resonator(wireExciter * 0.62f, wireFreq * 1.57f,
-                                  juce::jlimit(0.68f, 0.988f, wireRadius - 0.018f),
-                                  v.wire3, v.wire4, outputRate);
-    const float wire = (wireA + 0.62f * wireB) * wires
-        * (0.55f + 0.90f * velocityCurve);
+    const float wire = 0.0f;
 
     const float tonal = top * 1.15f + bottom * 0.58f + modal + shell * (0.95f + 0.55f * res);
     const float noiseLayer = wire + white * (0.055f + 0.10f * referenceHigh) * refEnv;
