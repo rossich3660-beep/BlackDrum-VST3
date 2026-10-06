@@ -51,6 +51,10 @@ public:
     float getMembraneVelocity() const { return membraneVelocity.load(); }
     void setPhaseVocoderMix(float v) { phaseVocoderMix.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getPhaseVocoderMix() const { return phaseVocoderMix.load(); }
+    void setCompressorMix(float v) { compressorMix.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getCompressorMix() const { return compressorMix.load(); }
+    void setRoomReverbMix(float v) { roomReverbMix.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getRoomReverbMix() const { return roomReverbMix.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
 
@@ -98,6 +102,20 @@ private:
     // Phase-vocoder spectral morphing: a deliberately small STFT layer blended
     // with the direct drum signal. It uses fixed-size, allocation-free state.
     std::atomic<float> phaseVocoderMix { 0.0f };
+    // Living dynamics: the compressor is intentionally a parallel, velocity-aware
+    // layer so it brings up body/tail without flattening the hit transient.
+    std::atomic<float> compressorMix { 0.0f };
+    std::array<float, 2> compressorEnvelope { 0.0f, 0.0f };
+    std::array<float, 2> compressorGain { 1.0f, 1.0f };
+    // Small fixed Schroeder-style room: several short feedback delays plus
+    // cross-channel diffusion. No allocations or locks occur in processBlock.
+    std::atomic<float> roomReverbMix { 0.0f };
+    static constexpr int roomDelayCount = 4;
+    static constexpr int roomMaxDelay = 4096;
+    std::array<std::array<float, roomMaxDelay>, 2> roomDelayBuffer {};
+    std::array<int, roomDelayCount> roomDelayLengths { 1499, 1877, 2333, 2861 };
+    std::array<int, roomDelayCount> roomWritePositions { 0, 0, 0, 0 };
+    std::array<float, 2> roomDampingState { 0.0f, 0.0f };
     static constexpr int pvFFTSize = 1024;
     static constexpr int pvHopSize = 128;
     static constexpr int pvBins = pvFFTSize / 2 + 1;
@@ -129,5 +147,6 @@ private:
     bool restoreStateTree(const juce::ValueTree&);
     void resetPhaseVocoder();
     float processPhaseVocoder(float input, float morphAmount, float velocity);
+    float processRoomReverb(float input, int channel, float velocity);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
