@@ -254,9 +254,9 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int)
     const float bottomBase = 185.0f + 155.0f * bottomTune + 0.012f * referenceCentroid;
 
     const float topRadius = juce::jlimit(0.900f, 0.996f,
-        0.972f - 0.045f * topDamping.load() + 0.008f * velocityCurve);
+        0.991f - 0.018f * topDamping.load() + 0.004f * velocityCurve);
     const float bottomRadius = juce::jlimit(0.895f, 0.996f,
-        0.970f - 0.050f * bottomDamping.load());
+        0.989f - 0.022f * bottomDamping.load());
 
     const float top = resonator(exciter * (1.8f + 1.1f * velocityCurve),
                                 headBase, topRadius, v.topY1, v.topY2, outputRate);
@@ -284,7 +284,7 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int)
         const float base = 100.0f + 125.0f * (1.0f - depth) + 190.0f * diameter;
         const float freq = base * shellRatios[m] * (0.82f + 0.40f * material);
         const float radius = juce::jlimit(0.87f, 0.995f,
-            0.955f + 0.018f * material - 0.012f * depth - 0.006f * m);
+            0.982f + 0.006f * material - 0.006f * depth - 0.004f * m);
         const float gain = (0.28f / (1.0f + 0.28f * m)) * (0.75f + 0.55f * res);
         shell += resonator(exciter * 0.90f, freq, radius,
                            v.shellY1[(size_t) m], v.shellY2[(size_t) m], outputRate) * gain;
@@ -295,7 +295,7 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int)
 
     const float wireFreq = 1500.0f + 3800.0f * wireT + 900.0f * referenceHigh;
     const float wireRadius = juce::jlimit(0.70f, 0.991f,
-        0.920f + 0.055f * wireT - 0.095f * wireD);
+        0.966f + 0.026f * wireT - 0.052f * wireD);
 
     const float wireA = resonator(wireExciter, wireFreq, wireRadius,
                                   v.wire1, v.wire2, outputRate);
@@ -319,14 +319,14 @@ float BlackDrumAudioProcessor::renderVoice(Voice& v, int)
 
     // Gain staging is deliberately conservative before the final soft clip.
     float out = (tonal * 3.4f + noiseLayer * 2.2f) * level;
-    out += exciter * (0.10f + 0.16f * velocityCurve) * naturalDecay;
+    out += exciter * (0.10f + 0.16f * velocityCurve) * (0.55f + 0.45f * naturalDecay);
     out *= 0.92f + 0.08f * room.load();
     out = std::tanh(out * (1.10f + 0.45f * velocityCurve));
 
     ++v.lifeSamples;
     ++v.age;
 
-    if (ageSeconds > 2.5f)
+    if (ageSeconds > 4.0f)
         v.active = false;
 
     return out;
