@@ -496,7 +496,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const float wireAmount = wireNoiseMix.load();
             const float collisionAmount = wireCollisionMix.load();
             const int voiceLimitForLayers = juce::jlimit(1, 16, voiceCount.load());
-            if (wireAmount > 0.0001f)
+            if (wireAmount > 0.0001f || collisionAmount > 0.0001f)
             {
                 // Three short resonant wire modes. Each voice has independent
                 // state, so repeated hits do not share an identical wire tail.
