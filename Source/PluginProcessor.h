@@ -57,6 +57,8 @@ public:
     float getRoomReverbMix() const { return roomReverbMix.load(); }
     void setPhysicalSynthMix(float v) { physicalSynthMix.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getPhysicalSynthMix() const { return physicalSynthMix.load(); }
+    void setWireCollisionMix(float v) { wireCollisionMix.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getWireCollisionMix() const { return wireCollisionMix.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
 
@@ -79,6 +81,10 @@ private:
         float membranePrev[2] = { 0.0f, 0.0f };
         float noiseLow[2] = { 0.0f, 0.0f };
         float wirePrev[2] = { 0.0f, 0.0f };
+        float collisionEnergy[2] = { 0.0f, 0.0f };
+        float collisionEnv[2] = { 0.0f, 0.0f };
+        float collisionY1[2][2] = {};
+        float collisionY2[2][2] = {};
         float wireY1[3][2] = {};
         float wireY2[3][2] = {};
 
@@ -116,6 +122,7 @@ private:
     // Hybrid physical/modal synthesis layer. Default is bypassed so the
     // existing BlackDrum sound is unchanged until the user turns it up.
     std::atomic<float> physicalSynthMix { 1.0f };
+    std::atomic<float> wireCollisionMix { 0.35f };
     float physicalExciter[2] = { 0.0f, 0.0f };
     float physicalPrev[2] = { 0.0f, 0.0f };
     float physicalMembraneY1[2] = { 0.0f, 0.0f };
