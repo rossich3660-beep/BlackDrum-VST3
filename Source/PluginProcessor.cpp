@@ -377,6 +377,13 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                     newVoice.membranePrev[vc] = 0.0f;
                     newVoice.noiseLow[vc] = 0.0f;
                     newVoice.wirePrev[vc] = 0.0f;
+                    newVoice.collisionEnergy[vc] = 0.0f;
+                    newVoice.collisionEnv[vc] = 0.0f;
+                    for (int mode = 0; mode < 2; ++mode)
+                    {
+                        newVoice.collisionY1[mode][vc] = 0.0f;
+                        newVoice.collisionY2[mode][vc] = 0.0f;
+                    }
                     for (int mode = 0; mode < 3; ++mode)
                     {
                         newVoice.wireY1[mode][vc] = 0.0f;
@@ -474,7 +481,9 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             // Each active voice gets its own noise stream and phase. This prevents
             // repeated MIDI hits from sharing an identical noise waveform.
             float wire = 0.0f;
+            float wireCollision = 0.0f;
             const float wireAmount = wireNoiseMix.load();
+            const float collisionAmount = wireCollisionMix.load();
             const int voiceLimitForLayers = juce::jlimit(1, 16, voiceCount.load());
             if (wireAmount > 0.0001f)
             {
@@ -531,11 +540,60 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                                 / (float)(sourceRate * (0.11f + 0.10f * vce.velocity)));
                     }
                     wire += voiceWire;
+
+                    // Physical snare-wire collision: detect the short membrane edge/contact
+                    // event, build a velocity-dependent contact envelope, then excite two
+                    // heavily damped wire modes. This is deliberately additive and bounded
+                    // so it enriches the hit without replacing the original snare sample.
+                    if (collisionAmount > 0.0001f)
+                    {
+                        const float impactEnergy = std::abs(impact);
+                        const float threshold = 0.006f + 0.024f * (1.0f - vce.velocity);
+                        const float contact = juce::jlimit(0.0f, 1.0f,
+                            (impactEnergy - threshold) / (0.045f + 0.085f * vce.velocity));
+                        const float energyCoeff = contact > vce.collisionEnergy[fc] ? 0.24f : 0.045f;
+                        vce.collisionEnergy[fc] += energyCoeff * (contact - vce.collisionEnergy[fc]);
+
+                        const float envCoeff = contact > vce.collisionEnv[fc]
+                            ? (0.20f + 0.12f * vce.velocity)
+                            : (0.028f + 0.018f * vce.velocity);
+                        vce.collisionEnv[fc] += envCoeff * (contact - vce.collisionEnv[fc]);
+
+                        const float contactDrive = std::tanh(impact
+                            * (1.0f + 2.6f * vce.velocity))
+                            * vce.collisionEnv[fc]
+                            * (0.45f + 0.55f * vce.collisionEnergy[fc]);
+                        const float collisionFreqs[2] = { 2750.0f, 4650.0f };
+                        const float collisionRadii[2] = { 0.885f, 0.825f };
+                        for (int mode = 0; mode < 2; ++mode)
+                        {
+                            const float freq = juce::jmin(
+                                collisionFreqs[mode] * (1.0f + 0.075f * vce.velocity), 0.43f * sr);
+                            const float w = 2.0f * juce::MathConstants<float>::pi * freq / sr;
+                            const float r = juce::jlimit(0.76f, 0.93f,
+                                collisionRadii[mode] + 0.018f * vce.velocity);
+                            const float y = contactDrive * (0.014f + 0.020f * vce.velocity)
+                                + 2.0f * r * std::cos(w) * vce.collisionY1[mode][fc]
+                                - r * r * vce.collisionY2[mode][fc];
+                            vce.collisionY2[mode][fc] = vce.collisionY1[mode][fc];
+                            vce.collisionY1[mode][fc] = juce::jlimit(-1.0f, 1.0f, y);
+                            wireCollision += vce.collisionY1[mode][fc]
+                                * (0.035f + 0.040f * vce.velocity)
+                                * vce.collisionEnv[fc]
+                                * std::exp(-(float)vce.position
+                                    / (float)(sourceRate * (0.025f + 0.035f * vce.velocity)));
+                        }
+                    }
                 }
 
                 if (voiceLimitForLayers > 1)
-                    wire *= 1.0f / std::sqrt((float)voiceLimitForLayers);
+                {
+                    const float voiceNorm = 1.0f / std::sqrt((float)voiceLimitForLayers);
+                    wire *= voiceNorm;
+                    wireCollision *= voiceNorm;
+                }
             }
+            wireCollision *= collisionAmount;
             float membrane = 0.0f;
             if (membraneEnabled.load())
             {
@@ -606,7 +664,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             const float phaseVocoder = processPhaseVocoder(
                 spectralOut, phaseVocoderMix.load(),
                 juce::jlimit(0.0f, 1.0f, hitVelocity));
-            float living = spectralOut * tailShape + wire + membrane
+            float living = spectralOut * tailShape + wire + wireCollision + membrane
                 + phaseVocoder * phaseVocoderMix.load() * 0.85f;
 
             // Parallel, velocity-aware compression. The dry transient remains intact;
@@ -662,6 +720,7 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("compressorMix", getCompressorMix(), nullptr);
     state.setProperty("roomReverbMix", getRoomReverbMix(), nullptr);
     state.setProperty("physicalSynthMix", getPhysicalSynthMix(), nullptr);
+    state.setProperty("wireCollisionMix", getWireCollisionMix(), nullptr);
     state.setProperty("transient", getTransient(), nullptr);
     state.setProperty("sustain", getSustain(), nullptr);
     state.setProperty("dynamicResponse", getDynamicResponse(), nullptr);
@@ -691,6 +750,7 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setCompressorMix((float) state.getProperty("compressorMix", getCompressorMix()));
     setRoomReverbMix((float) state.getProperty("roomReverbMix", getRoomReverbMix()));
     setPhysicalSynthMix((float) state.getProperty("physicalSynthMix", getPhysicalSynthMix()));
+    setWireCollisionMix((float) state.getProperty("wireCollisionMix", getWireCollisionMix()));
     setTransient((float) state.getProperty("transient", getTransient()));
     setSustain((float) state.getProperty("sustain", getSustain()));
     setDynamicResponse((float) state.getProperty("dynamicResponse", getDynamicResponse()));
