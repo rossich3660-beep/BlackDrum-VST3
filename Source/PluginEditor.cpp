@@ -12,7 +12,7 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
         tab->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     }
     mainTabButton.onClick = [this] { setLivePhysicsTab(false); };
-    livePhysicsTabButton.onClick = [this] { setLivePhysicsTab(true); }
+    livePhysicsTabButton.onClick = [this] { setLivePhysicsTab(true); };
     title.setText("BLACKDRUM", juce::dontSendNotification);
     title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
