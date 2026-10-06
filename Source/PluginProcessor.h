@@ -57,6 +57,20 @@ public:
     float getRoomReverbMix() const { return roomReverbMix.load(); }
     void setPhysicalSynthMix(float v) { physicalSynthMix.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getPhysicalSynthMix() const { return physicalSynthMix.load(); }
+    void setLivePhysicsMix(float v) { livePhysicsMix.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getLivePhysicsMix() const { return livePhysicsMix.load(); }
+    void setWireCollision(float v) { wireCollision.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getWireCollision() const { return wireCollision.load(); }
+    void setMembraneCoupling(float v) { membraneCoupling.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getMembraneCoupling() const { return membraneCoupling.load(); }
+    void setHitPosition(float v) { hitPosition.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getHitPosition() const { return hitPosition.load(); }
+    void setPitchKick(float v) { pitchKick.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getPitchKick() const { return pitchKick.load(); }
+    void setLiveRandomness(float v) { liveRandomness.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getLiveRandomness() const { return liveRandomness.load(); }
+    void setEnergyMemory(float v) { energyMemory.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getEnergyMemory() const { return energyMemory.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
 
@@ -81,6 +95,9 @@ private:
         float wirePrev[2] = { 0.0f, 0.0f };
         float wireY1[3][2] = {};
         float wireY2[3][2] = {};
+        float wireCollisionState[2] = { 0.0f, 0.0f };
+        float wireCollisionPrev[2] = { 0.0f, 0.0f };
+        float hitPosition = 0.5f;
 
     };
     std::array<Voice, 16> voices{};
@@ -116,6 +133,18 @@ private:
     // Hybrid physical/modal synthesis layer. Default is bypassed so the
     // existing BlackDrum sound is unchanged until the user turns it up.
     std::atomic<float> physicalSynthMix { 1.0f };
+    // Live snare physics: coupled membrane/wire collisions, impact-position
+    // modal morphing, tension/pitch kick, controlled stochastic variation and
+    // short-term energy memory between consecutive strikes.
+    std::atomic<float> livePhysicsMix { 0.35f };
+    std::atomic<float> wireCollision { 0.45f };
+    std::atomic<float> membraneCoupling { 0.40f };
+    std::atomic<float> hitPosition { 0.50f };
+    std::atomic<float> pitchKick { 0.35f };
+    std::atomic<float> liveRandomness { 0.18f };
+    std::atomic<float> energyMemory { 0.35f };
+    std::array<float, 2> liveEnergy { 0.0f, 0.0f };
+    std::array<float, 2> liveCarry { 0.0f, 0.0f };
     float physicalExciter[2] = { 0.0f, 0.0f };
     float physicalPrev[2] = { 0.0f, 0.0f };
     float physicalMembraneY1[2] = { 0.0f, 0.0f };
@@ -162,5 +191,6 @@ private:
     float processPhaseVocoder(float input, float morphAmount, float velocity);
     float processRoomReverb(float input, int channel, float velocity);
     float processPhysicalSynth(float input, int channel, float velocity);
+    float processLivePhysics(float input, int channel, float velocity, float position, float carry);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
