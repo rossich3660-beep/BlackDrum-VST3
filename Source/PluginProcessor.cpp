@@ -552,6 +552,41 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
     }
 }
 
+SampleFeatures BlackDrumAudioProcessor::getSampleFeatures() const
+{
+    return sampleFeatures;
+}
+
+AutoSettings BlackDrumAudioProcessor::getAutoSettings() const
+{
+    AutoSettings s;
+    s.brightnessAmt = autoBrightness.load();
+    s.snapAmt = autoSnap.load();
+    s.noiseLayerAmt = autoNoise.load();
+    s.attackSoftening = autoAttackSoftening.load();
+    s.tailShorten = autoTailShorten.load();
+    s.pitchDropAmt = autoPitchDrop.load();
+    s.saturationAmt = autoSaturation.load();
+    s.bodyBoostAmt = autoBodyBoost.load();
+    s.velocityCurve = autoVelocityCurve.load();
+    return s;
+}
+
+void BlackDrumAudioProcessor::applyAutoSettings(const AutoSettings& s, bool markAsManual)
+{
+    autoBrightness.store(autoClamp(s.brightnessAmt));
+    autoSnap.store(autoClamp(s.snapAmt));
+    autoNoise.store(autoClamp(s.noiseLayerAmt));
+    autoAttackSoftening.store(autoClamp(s.attackSoftening));
+    autoTailShorten.store(autoClamp(s.tailShorten));
+    autoPitchDrop.store(autoClamp(s.pitchDropAmt));
+    autoSaturation.store(autoClamp(s.saturationAmt));
+    autoBodyBoost.store(autoClamp(s.bodyBoostAmt));
+    autoVelocityCurve.store(autoClamp(s.velocityCurve));
+    if (markAsManual)
+        manualAutoEdits.store(true);
+}
+
 juce::AudioProcessorEditor* BlackDrumAudioProcessor::createEditor()
 {
     return new BlackDrumAudioProcessorEditor(*this);
