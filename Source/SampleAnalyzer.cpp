@@ -218,7 +218,7 @@ SampleFeatures SampleAnalyzer::analyze(const juce::AudioBuffer<float>& mono, dou
     int fundamentalBin = -1;
     float best = 0.0f;
     const int firstBin = juce::jmax(1, (int)std::floor(80.0 * fftSize / sampleRate));
-    const int lastBin = juce::min(fftSize / 2 - 1, (int)std::ceil(400.0 * fftSize / sampleRate));
+    const int lastBin = juce::jmin(fftSize / 2 - 1, (int)std::ceil(400.0 * fftSize / sampleRate));
     for (int k = firstBin; k <= lastBin; ++k)
     {
         if (first80Power[(size_t)k] > best)
