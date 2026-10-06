@@ -94,6 +94,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     wireSlider.onValueChange = [this] { processor.setWireNoiseMix((float)wireSlider.getValue()); };
     addAndMakeVisible(wireSlider);
 
+    setupKnob(shellSlider, shellLabel, "SHELL RESONANCE", processor.getShellResonanceMix(), [this](float v){ processor.setShellResonanceMix(v); });
+
     loadButton.onClick = [this]
     {
         if (fileChooser != nullptr)
@@ -231,8 +233,8 @@ void BlackDrumAudioProcessorEditor::resized()
 
     // Main processing controls: two compact rows, with labels kept separate from knobs.
     const int knobW = 64;
-    const int colW = 135;
-    const int startX = 120;
+    const int colW = 120;
+    const int startX = 110;
     const int row1LabelY = 62, row1KnobY = 82;
     const int row2LabelY = 170, row2KnobY = 190;
     auto place = [&](juce::Label& label, juce::Slider& slider, int index, int row)
@@ -246,26 +248,27 @@ void BlackDrumAudioProcessorEditor::resized()
     place(bodyMixLabel, bodyMixSlider, 0, 0);
     place(spectralLabel, spectralSlider, 1, 0);
     place(wireLabel, wireSlider, 2, 0);
+    place(shellLabel, shellSlider, 3, 0);
     place(attackLabel, attackSlider, 0, 1);
     place(sustainLabel, sustainSlider, 1, 1);
     place(dynamicLabel, dynamicSlider, 2, 1);
 
-    membraneTitle.setBounds(470, 62, 250, 24);
-    membraneToggle.setBounds(470, 88, 220, 26);
+    membraneTitle.setBounds(470, 268, 330, 24);
+    membraneToggle.setBounds(470, 294, 220, 26);
     auto placeMem = [&](juce::Label& label, juce::Slider& slider, int index)
     {
         const int x = 470 + index * 100;
-        label.setBounds(x, 142, 96, 20);
-        slider.setBounds(x + 14, 164, 64, 64);
+        label.setBounds(x, 330, 96, 20);
+        slider.setBounds(x + 14, 352, 64, 64);
     };
     placeMem(tensionLabel, tensionSlider, 0);
     placeMem(stiffnessLabel, stiffnessSlider, 1);
     placeMem(decayLabel, decaySlider, 2);
     placeMem(velocityLabel, velocitySlider, 3);
 
-    hint.setBounds(margin, 300, getWidth() - 2 * margin, 24);
-    filename.setBounds(margin, 326, getWidth() - 2 * margin, 24);
-    loadButton.setBounds(120, 390, 170, 36);
-    playButton.setBounds(365, 390, 170, 36);
-    removeButton.setBounds(610, 390, 170, 36);
+    hint.setBounds(margin, 300, 410, 24);
+    filename.setBounds(margin, 326, 410, 24);
+    loadButton.setBounds(120, 470, 170, 36);
+    playButton.setBounds(365, 470, 170, 36);
+    removeButton.setBounds(610, 470, 170, 36);
 }
