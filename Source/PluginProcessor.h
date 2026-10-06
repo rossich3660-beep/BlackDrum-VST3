@@ -58,6 +58,7 @@ public:
     bool applyPresetState(const juce::ValueTree&);
 
     SampleFeatures getSampleFeatures() const;
+    void setSampleFeatures(const SampleFeatures& f) { sampleFeatures = f; }
     AutoSettings getAutoSettings() const;
     void applyAutoSettings(const AutoSettings&, bool markAsManual = false);
     bool hasManualAutoEdits() const { return manualAutoEdits.load(); }
