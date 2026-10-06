@@ -89,7 +89,12 @@ private:
         std::array<float, 8> modeY2 {};
         std::array<float, 4> shellY1 {};
         std::array<float, 4> shellY2 {};
-        float wire1 = 0.0f, wire2 = 0.0f, wire3 = 0.0f, wire4 = 0.0f;
+        // Stochastic snare-bed state: the wires are excited by discrete rattle events,
+        // not by a pitched oscillator.
+        float wireBurst = 0.0f;
+        float wireFilter = 0.0f;
+        float wireFilter2 = 0.0f;
+        float bottomEnergy = 0.0f;
         float exciter = 0.0f;
     };
 
