@@ -25,6 +25,11 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     roomWritePositions.fill(0);
     roomDampingState[0] = roomDampingState[1] = 0.0f;
     roomInputState[0] = roomInputState[1] = 0.0f;
+    physicalExciter[0] = physicalExciter[1] = 0.0f;
+    physicalPrev[0] = physicalPrev[1] = 0.0f;
+    physicalMembraneY1[0] = physicalMembraneY1[1] = physicalMembraneY2[0] = physicalMembraneY2[1] = 0.0f;
+    for (auto& mode : physicalShellY1) for (auto& value : mode) value = 0.0f;
+    for (auto& mode : physicalShellY2) for (auto& value : mode) value = 0.0f;
 
     // Stable, gently damped resonator centered in the snare's body range.
     const float frequency = 185.0f;
@@ -207,6 +212,57 @@ float BlackDrumAudioProcessor::processRoomReverb(float input, int channel, float
     return juce::jlimit(-0.35f, 0.35f, wet * mix * roomShape * safety);
 }
 
+
+float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, float velocity)
+{
+    const float mix = physicalSynthMix.load();
+    if (mix <= 0.0001f) return 0.0f;
+    const int ch = juce::jlimit(0, 1, channel);
+    const float v = juce::jlimit(0.0f, 1.0f, velocity);
+
+    const float edge = input - physicalPrev[ch];
+    physicalPrev[ch] = input;
+    physicalExciter[ch] += (0.075f + 0.055f * v) * (edge - physicalExciter[ch]);
+    const float exciter = juce::jlimit(-1.0f, 1.0f, physicalExciter[ch] + 0.035f * input);
+
+    const float membraneFreq = 155.0f + 105.0f * std::sqrt(v);
+    const float membraneRadius = 0.965f + 0.014f * v;
+    const float mw = 2.0f * juce::MathConstants<float>::pi * membraneFreq
+                   / (float)juce::jmax(1.0, outputRate);
+    const float mb = 1.0f - membraneRadius;
+    const float ma1 = -2.0f * membraneRadius * std::cos(mw);
+    const float ma2 = membraneRadius * membraneRadius;
+    const float nonlinearExciter = std::tanh(exciter * (1.0f + 2.2f * v));
+    const float membrane = mb * nonlinearExciter
+                         - ma1 * physicalMembraneY1[ch]
+                         - ma2 * physicalMembraneY2[ch];
+    physicalMembraneY2[ch] = physicalMembraneY1[ch];
+    physicalMembraneY1[ch] = membrane;
+
+    constexpr float shellFreq[3] = { 120.0f, 225.0f, 405.0f };
+    constexpr float shellGain[3] = { 0.20f, 0.13f, 0.075f };
+    float shell = 0.0f;
+    for (int mode = 0; mode < 3; ++mode)
+    {
+        const float frequency = shellFreq[mode] * (1.0f + 0.045f * v);
+        const float radius = 0.962f - 0.006f * (float)mode + 0.008f * v;
+        const float w = 2.0f * juce::MathConstants<float>::pi * frequency
+                      / (float)juce::jmax(1.0, outputRate);
+        const float b0 = 1.0f - radius;
+        const float a1 = -2.0f * radius * std::cos(w);
+        const float a2 = radius * radius;
+        const float y = b0 * exciter - a1 * physicalShellY1[mode][ch]
+                      - a2 * physicalShellY2[mode][ch];
+        physicalShellY2[mode][ch] = physicalShellY1[mode][ch];
+        physicalShellY1[mode][ch] = y;
+        shell += y * shellGain[mode];
+    }
+
+    const float brightness = 0.72f + 0.58f * v;
+    const float physical = std::tanh((membrane * 0.52f + shell) * brightness);
+    return juce::jlimit(-0.30f, 0.30f, physical * mix * (0.72f + 0.55f * v));
+}
+
 bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
 {
     std::unique_ptr<juce::AudioFormatReader> r(formats.createReaderFor(f));
@@ -228,6 +284,11 @@ bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
     for (auto& ch : roomDelayBuffer) ch.fill(0.0f);
     roomWritePositions.fill(0);
     roomDampingState[0] = roomDampingState[1] = 0.0f;
+    physicalExciter[0] = physicalExciter[1] = 0.0f;
+    physicalPrev[0] = physicalPrev[1] = 0.0f;
+    physicalMembraneY1[0] = physicalMembraneY1[1] = physicalMembraneY2[0] = physicalMembraneY2[1] = 0.0f;
+    for (auto& mode : physicalShellY1) for (auto& value : mode) value = 0.0f;
+    for (auto& mode : physicalShellY2) for (auto& value : mode) value = 0.0f;
     return true;
 }
 
@@ -391,7 +452,8 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             // additive, low-level component rather than a crossfade replacement.
             const float bodyLevel = 0.22f + 0.18f * velocity;
             const float blended = raw + body * resonanceMix * bodyLevel;
-            const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity))
+            const float physicalLayer = processPhysicalSynth(blended, fc, velocity);
+            const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity) + physicalLayer)
                                            * voiceGain * transient * tailShape * 1.10f);
 
             // Lightweight spectral resynthesis-inspired layer: split the source into
@@ -599,6 +661,7 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("phaseVocoderMix", getPhaseVocoderMix(), nullptr);
     state.setProperty("compressorMix", getCompressorMix(), nullptr);
     state.setProperty("roomReverbMix", getRoomReverbMix(), nullptr);
+    state.setProperty("physicalSynthMix", getPhysicalSynthMix(), nullptr);
     state.setProperty("transient", getTransient(), nullptr);
     state.setProperty("sustain", getSustain(), nullptr);
     state.setProperty("dynamicResponse", getDynamicResponse(), nullptr);
@@ -627,6 +690,7 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setPhaseVocoderMix((float) state.getProperty("phaseVocoderMix", getPhaseVocoderMix()));
     setCompressorMix((float) state.getProperty("compressorMix", getCompressorMix()));
     setRoomReverbMix((float) state.getProperty("roomReverbMix", getRoomReverbMix()));
+    setPhysicalSynthMix((float) state.getProperty("physicalSynthMix", getPhysicalSynthMix()));
     setTransient((float) state.getProperty("transient", getTransient()));
     setSustain((float) state.getProperty("sustain", getSustain()));
     setDynamicResponse((float) state.getProperty("dynamicResponse", getDynamicResponse()));
