@@ -267,6 +267,59 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
     return juce::jlimit(-0.30f, 0.30f, physical * mix * (0.72f + 0.55f * v));
 }
 
+
+float BlackDrumAudioProcessor::processLivePhysics(float input, int channel, float velocity, float position, float carry)
+{
+    const float master = livePhysicsMix.load();
+    if (master <= 0.0001f)
+        return 0.0f;
+
+    const int ch = juce::jlimit(0, 1, channel);
+    const float v = juce::jlimit(0.0f, 1.0f, velocity);
+    const float pos = juce::jlimit(0.0f, 1.0f, position);
+
+    // Impact position changes which modal families receive energy: edge hits
+    // emphasize higher modes while center hits retain more low body.
+    const float impact = input - physicalPrev[ch];
+    const float edgeWeight = 0.35f + 0.95f * pos;
+    const float centerWeight = 1.15f - 0.55f * pos;
+    const float excitation = std::tanh((impact * edgeWeight + carry * 0.55f)
+                                      * (0.75f + 1.65f * v));
+
+    const float kick = pitchKick.load();
+    const float kickEnv = std::exp(-0.00135f * (float)juce::jmax(0.0, playbackPosition));
+    const float pitchScale = 1.0f + kick * (0.006f + 0.026f * v) * kickEnv;
+
+    const float freq0 = 145.0f * pitchScale * (0.92f + 0.32f * centerWeight);
+    const float freq1 = 265.0f * pitchScale * (0.82f + 0.42f * pos);
+    float result = 0.0f;
+    const float freqs[2] = { freq0, freq1 };
+    const float gains[2] = { 0.075f * centerWeight, 0.055f * (0.65f + pos) };
+
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        const float f = juce::jmin(freqs[mode], 0.40f * (float)juce::jmax(1.0, outputRate));
+        const float w = 2.0f * juce::MathConstants<float>::pi * f
+                      / (float)juce::jmax(1.0, outputRate);
+        const float radius = juce::jlimit(0.90f, 0.992f,
+                                          0.946f + 0.028f * membraneCoupling.load()
+                                          + 0.008f * v - 0.010f * pos);
+        const float a1 = -2.0f * radius * std::cos(w);
+        const float a2 = radius * radius;
+        const float y1 = physicalMembraneY1[ch];
+        const float y2 = physicalMembraneY2[ch];
+        const float y = (1.0f - radius) * excitation - a1 * y1 - a2 * y2;
+        physicalMembraneY2[ch] = y1;
+        physicalMembraneY1[ch] = juce::jlimit(-2.0f, 2.0f, y);
+        result += physicalMembraneY1[ch] * gains[mode];
+    }
+
+    const float coupling = membraneCoupling.load();
+    const float memoryLayer = carry * (0.04f + 0.16f * coupling);
+    return juce::jlimit(-0.22f, 0.22f,
+        std::tanh(result + memoryLayer) * master * (0.70f + 0.55f * v));
+}
+
 bool BlackDrumAudioProcessor::loadSample(const juce::File& f)
 {
     std::unique_ptr<juce::AudioFormatReader> r(formats.createReaderFor(f));
@@ -794,55 +847,4 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new BlackDrumAudioProcessor();
 
-float BlackDrumAudioProcessor::processLivePhysics(float input, int channel, float velocity, float position, float carry)
-{
-    const float master = livePhysicsMix.load();
-    if (master <= 0.0001f)
-        return 0.0f;
-
-    const int ch = juce::jlimit(0, 1, channel);
-    const float v = juce::jlimit(0.0f, 1.0f, velocity);
-    const float pos = juce::jlimit(0.0f, 1.0f, position);
-
-    // Impact position changes which modal families receive energy: edge hits
-    // emphasize higher modes while center hits retain more low body.
-    const float impact = input - physicalPrev[ch];
-    const float edgeWeight = 0.35f + 0.95f * pos;
-    const float centerWeight = 1.15f - 0.55f * pos;
-    const float excitation = std::tanh((impact * edgeWeight + carry * 0.55f)
-                                      * (0.75f + 1.65f * v));
-
-    const float kick = pitchKick.load();
-    const float kickEnv = std::exp(-0.00135f * (float)juce::jmax(0.0, playbackPosition));
-    const float pitchScale = 1.0f + kick * (0.006f + 0.026f * v) * kickEnv;
-
-    const float freq0 = 145.0f * pitchScale * (0.92f + 0.32f * centerWeight);
-    const float freq1 = 265.0f * pitchScale * (0.82f + 0.42f * pos);
-    float result = 0.0f;
-    const float freqs[2] = { freq0, freq1 };
-    const float gains[2] = { 0.075f * centerWeight, 0.055f * (0.65f + pos) };
-
-    for (int mode = 0; mode < 2; ++mode)
-    {
-        const float f = juce::jmin(freqs[mode], 0.40f * (float)juce::jmax(1.0, outputRate));
-        const float w = 2.0f * juce::MathConstants<float>::pi * f
-                      / (float)juce::jmax(1.0, outputRate);
-        const float radius = juce::jlimit(0.90f, 0.992f,
-                                          0.946f + 0.028f * membraneCoupling.load()
-                                          + 0.008f * v - 0.010f * pos);
-        const float a1 = -2.0f * radius * std::cos(w);
-        const float a2 = radius * radius;
-        const float y1 = physicalMembraneY1[ch];
-        const float y2 = physicalMembraneY2[ch];
-        const float y = (1.0f - radius) * excitation - a1 * y1 - a2 * y2;
-        physicalMembraneY2[ch] = y1;
-        physicalMembraneY1[ch] = juce::jlimit(-2.0f, 2.0f, y);
-        result += physicalMembraneY1[ch] * gains[mode];
-    }
-
-    const float coupling = membraneCoupling.load();
-    const float memoryLayer = carry * (0.04f + 0.16f * coupling);
-    return juce::jlimit(-0.22f, 0.22f,
-        std::tanh(result + memoryLayer) * master * (0.70f + 0.55f * v));
-}
 }
