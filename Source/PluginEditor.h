@@ -1,23 +1,28 @@
 #pragma once
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
-class BlackDrumAudioProcessorEditor : public juce::AudioProcessorEditor, public juce::FileDragAndDropTarget {
+
+class PhysicalSnareAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                          private juce::Timer
+{
 public:
- explicit BlackDrumAudioProcessorEditor(BlackDrumAudioProcessor&);
- void paint(juce::Graphics&) override;
- void resized() override;
- bool isInterestedInFileDrag(const juce::StringArray&) override;
- void fileDragEnter(const juce::StringArray&,int,int) override;
- void fileDragExit(const juce::StringArray&) override;
- void filesDropped(const juce::StringArray&,int,int) override;
+    explicit PhysicalSnareAudioProcessorEditor(PhysicalSnareAudioProcessor&);
+    ~PhysicalSnareAudioProcessorEditor() override = default;
+
+    void paint(juce::Graphics&) override;
+    void resized() override;
+
 private:
- void loadFrom(const juce::File&);
- bool isSupportedAudioFile(const juce::File&) const;
- BlackDrumAudioProcessor& processor;
- std::unique_ptr<juce::FileChooser> fileChooser;
- juce::TextButton loadButton{"LOAD SAMPLE"}, playButton{"PREVIEW"}, removeButton{"REMOVE"}, synthOnlyButton{"SYNTH ONLY"};
- juce::Label title, filename, hint;
- juce::Rectangle<int> dropArea;
- bool dragHover=false;
- JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessorEditor)
+    void timerCallback() override;
+
+    PhysicalSnareAudioProcessor& processor;
+
+    juce::Label title;
+    juce::Label stageLabel;
+    juce::Label midiLabel;
+    juce::Label velocityLabel;
+    juce::Label eventsLabel;
+    juce::Label infoLabel;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhysicalSnareAudioProcessorEditor)
 };
