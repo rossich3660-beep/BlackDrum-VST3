@@ -62,7 +62,7 @@ int SnareMembraneModel::chooseVoice(Head& head) noexcept
     return oldest;
 }
 
-int SnareMembraneModel::findActiveVoice(const Head& head) const noexcept
+int SnareMembraneModel::findActiveVoice(const Head& head) const
 {
     int best = -1;
     unsigned int bestAge = 0;
@@ -311,7 +311,9 @@ float SnareMembraneModel::processSample()
     applyTopAirFeedback(pressure, coupling);
 
     const float top = topBeforeCoupling - pressure * 0.015f;
-    const float bottom = processHead(bottomHead) * 0.94f + pressure * 0.025f;
+    // Air-driven bottom modal energy is applied on the following sample;
+    // do not process the whole bottom head a second time in the same sample.
+    const float bottom = bottomBeforeCoupling * 0.94f + pressure * 0.025f;
 
     return std::tanh((top + bottom * 0.80f) * 0.86f) * 0.78f;
 }
