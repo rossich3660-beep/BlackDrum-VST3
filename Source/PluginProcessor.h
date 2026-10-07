@@ -59,6 +59,8 @@ public:
     float getPhysicalSynthMix() const { return physicalSynthMix.load(); }
     void setWireCollisionMix(float v) { wireCollisionMix.store(juce::jlimit(0.0f, 1.0f, v)); }
     float getWireCollisionMix() const { return wireCollisionMix.load(); }
+    void setHitPositionMorph(float v) { hitPositionMorph.store(juce::jlimit(0.0f, 1.0f, v)); }
+    float getHitPositionMorph() const { return hitPositionMorph.load(); }
     juce::ValueTree createPresetState() const;
     bool applyPresetState(const juce::ValueTree&);
 
@@ -134,7 +136,7 @@ private:
     // Hybrid physical/modal synthesis layer. Default is bypassed so the
     // existing BlackDrum sound is unchanged until the user turns it up.
     std::atomic<float> physicalSynthMix { 1.0f };
-    // Automatic strike position: 0=center, 0.5=mid, 1=edge.
+    // Manual strike position: 0=center, 0.5=mid, 1=edge.
     std::atomic<float> hitPositionMorph { 0.5f };
     std::atomic<float> wireCollisionMix { 0.35f };
     float physicalExciter[2] = { 0.0f, 0.0f };
