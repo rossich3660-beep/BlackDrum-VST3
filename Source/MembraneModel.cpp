@@ -21,6 +21,7 @@ void SnareMembraneModel::reset()
     airDisplacement = 0.0f;
     airVelocity = 0.0f;
     lastBottomContact = 0.0f;
+    lastBottomContactVelocity = 0.0f;
 
     for (auto* head : { &topHead, &bottomHead })
     {
@@ -573,12 +574,19 @@ float SnareMembraneModel::processSample()
         bottomBeforeCoupling * bottomOutputGain
         + pressure * (0.018f + 0.050f * coupling);
 
-    lastBottomContact =
+    const float currentBottomContact =
         juce::jlimit(
             -1.0f,
             1.0f,
             bottomBeforeCoupling
             + pressure * (0.035f + 0.045f * coupling));
+
+    lastBottomContactVelocity =
+        (currentBottomContact - lastBottomContact)
+        * static_cast<float>(sampleRate);
+
+    lastBottomContact =
+        currentBottomContact;
 
     const float coupledMix =
         top + bottom * (0.55f + 0.25f * coupling);
