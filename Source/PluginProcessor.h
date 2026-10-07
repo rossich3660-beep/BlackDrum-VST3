@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <atomic>
+#include "MembraneModel.h"
 
 class PhysicalSnareAudioProcessor : public juce::AudioProcessor
 {
@@ -35,13 +36,26 @@ public:
     int getLastMidiVelocity() const noexcept { return lastMidiVelocity.load(std::memory_order_relaxed); }
     int getMidiEventCount() const noexcept { return midiEventCount.load(std::memory_order_relaxed); }
 
+    juce::AudioProcessorValueTreeState& getParameters() noexcept { return parameters; }
+
 private:
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    juce::AudioProcessorValueTreeState parameters;
+
     double currentSampleRate = 44100.0;
     int currentBlockSize = 0;
+
+    SnareMembraneModel membrane;
 
     std::atomic<int> lastMidiNote { -1 };
     std::atomic<int> lastMidiVelocity { 0 };
     std::atomic<int> midiEventCount { 0 };
+
+    std::atomic<float>* tuningParameter = nullptr;
+    std::atomic<float>* dampingParameter = nullptr;
+    std::atomic<float>* hitPositionParameter = nullptr;
+    std::atomic<float>* levelParameter = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhysicalSnareAudioProcessor)
 };
