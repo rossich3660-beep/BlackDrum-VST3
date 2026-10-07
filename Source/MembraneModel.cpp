@@ -1,6 +1,12 @@
 #include "MembraneModel.h"
 #include <cmath>
 
+namespace
+{
+constexpr float kTwoPi = juce::MathConstants<float>::twoPi;
+constexpr float kD60 = 6.90775527898f;
+}
+
 void SnareMembraneModel::prepare(double rate)
 {
     sampleRate = rate > 1000.0 ? rate : 44100.0;
@@ -10,82 +16,79 @@ void SnareMembraneModel::prepare(double rate)
 void SnareMembraneModel::reset()
 {
     ageCounter = 0;
+    airDisplacement = 0.0f;
+    airVelocity = 0.0f;
 
-    for (auto& voice : voices)
+    for (auto* head : { &topHead, &bottomHead })
     {
-        voice.active = false;
-        voice.age = 0;
+        for (auto& voice : head->voices)
+        {
+            voice.active = false;
+            voice.age = 0;
 
-        for (auto& mode : voice.modes)
-            mode = {};
+            for (auto& mode : voice.modes)
+                mode = {};
+        }
     }
 }
 
 void SnareMembraneModel::setParameters(
-    float newTuningHz,
+    float newTopTuningHz,
     float newDamping01,
-    float newHitPosition01)
+    float newHitPosition01,
+    float newBottomTuningHz,
+    float newAirCoupling01)
 {
-    tuningHz = juce::jlimit(90.0f, 360.0f, newTuningHz);
+    topTuningHz = juce::jlimit(90.0f, 360.0f, newTopTuningHz);
+    bottomTuningHz = juce::jlimit(90.0f, 360.0f, newBottomTuningHz);
     damping01 = juce::jlimit(0.0f, 1.0f, newDamping01);
     hitPosition01 = juce::jlimit(0.0f, 1.0f, newHitPosition01);
+    airCoupling01 = juce::jlimit(0.0f, 1.0f, newAirCoupling01);
 }
 
-int SnareMembraneModel::chooseVoice() noexcept
+int SnareMembraneModel::chooseVoice(Head& head) noexcept
 {
     int oldest = 0;
 
     for (int i = 0; i < MaxVoices; ++i)
     {
-        if (!voices[(size_t) i].active)
+        if (!head.voices[(size_t) i].active)
             return i;
 
-        if (voices[(size_t) i].age < voices[(size_t) oldest].age)
+        if (head.voices[(size_t) i].age < head.voices[(size_t) oldest].age)
             oldest = i;
     }
 
     return oldest;
 }
 
-void SnareMembraneModel::trigger(float velocity01)
+int SnareMembraneModel::findActiveVoice(const Head& head) const noexcept
 {
-    const float velocity = juce::jlimit(0.0f, 1.0f, velocity01);
-    auto& voice = voices[(size_t) chooseVoice()];
+    int best = -1;
+    unsigned int bestAge = 0;
 
-    voice.active = true;
-    voice.age = ++ageCounter;
-
-    // The strike radius is measured from the membrane centre.
-    // 0.0 = exact centre, 1.0 = rim.
-    const float radius = juce::jlimit(0.0f, 0.98f, hitPosition01);
-
-    std::array<float, NumModes> weights {};
-    float energy = 0.0f;
-
-    for (int i = 0; i < NumModes; ++i)
+    for (int i = 0; i < MaxVoices; ++i)
     {
-        const auto& spec = modeSpecs[(size_t) i];
-        const float besselArgument = spec.zero * radius;
-        const float shape = besselJ(spec.angularOrder, besselArgument);
+        const auto& voice = head.voices[(size_t) i];
 
-        // A small static modal weighting keeps the excitation stable while
-        // retaining the important spatial behaviour: centre hits suppress
-        // non-axisymmetric modes, while off-centre hits excite them.
-        const float modalGain = 1.0f / (1.0f + 0.075f * (float) i);
-        weights[(size_t) i] = shape * modalGain;
-        energy += weights[(size_t) i] * weights[(size_t) i];
+        if (!voice.active)
+            continue;
+
+        if (best < 0 || voice.age > bestAge)
+        {
+            best = i;
+            bestAge = voice.age;
+        }
     }
 
-    const float normalizer = energy > 1.0e-8f ? 1.0f / std::sqrt(energy) : 1.0f;
+    return best;
+}
 
-    // Nonlinear velocity-to-energy mapping: quiet strokes remain audible,
-    // while strong strokes deposit substantially more energy into the head.
-    const float impactEnergy = 0.075f + 1.05f * std::pow(velocity, 1.22f);
-
-    const float baseDecaySeconds =
-        juce::jmap(damping01, 0.0f, 1.0f, 1.85f, 0.42f);
-
-    constexpr float twoPi = juce::MathConstants<float>::twoPi;
+void SnareMembraneModel::configureVoice(
+    Voice& voice,
+    float tuningHz,
+    float baseDecaySeconds)
+{
     constexpr float fundamentalZero = modeSpecs[0].zero;
 
     for (int i = 0; i < NumModes; ++i)
@@ -95,29 +98,142 @@ void SnareMembraneModel::trigger(float velocity01)
 
         const float relativeFrequency = spec.zero / fundamentalZero;
         const float frequency = tuningHz * relativeFrequency;
-
         const float modeDecay =
-            baseDecaySeconds / (1.0f + 0.105f * (float) i);
+            baseDecaySeconds / (1.0f + 0.105f * static_cast<float>(i));
 
         const float safeDecay = juce::jmax(0.05f, modeDecay);
-        const float d60 = -std::log(0.001f);
 
         mode.phase = 0.0f;
-        mode.phaseStep = twoPi * frequency / (float) sampleRate;
-        mode.decayPerSample = std::exp(-d60 / (safeDecay * (float) sampleRate));
-
-        mode.amplitude = weights[(size_t) i] * normalizer * impactEnergy;
-
-        // Higher modes are slightly more transient-like.
-        mode.amplitude *= 1.0f + 0.018f * (float) i * velocity;
+        mode.phaseStep = kTwoPi * frequency / static_cast<float>(sampleRate);
+        mode.decayPerSample =
+            std::exp(-kD60 / (safeDecay * static_cast<float>(sampleRate)));
     }
 }
 
-float SnareMembraneModel::processSample()
+void SnareMembraneModel::trigger(float velocity01)
+{
+    const float velocity = juce::jlimit(0.0f, 1.0f, velocity01);
+    auto& voice = topHead.voices[(size_t) chooseVoice(topHead)];
+
+    voice.active = true;
+    voice.age = ++ageCounter;
+
+    const float radius = juce::jlimit(0.0f, 0.98f, hitPosition01);
+
+    std::array<float, NumModes> weights {};
+    float energy = 0.0f;
+
+    for (int i = 0; i < NumModes; ++i)
+    {
+        const auto& spec = modeSpecs[(size_t) i];
+        const float shape = besselJ(spec.angularOrder, spec.zero * radius);
+        const float modalGain = 1.0f / (1.0f + 0.075f * static_cast<float>(i));
+
+        weights[(size_t) i] = shape * modalGain;
+        energy += weights[(size_t) i] * weights[(size_t) i];
+    }
+
+    const float normalizer =
+        energy > 1.0e-8f ? 1.0f / std::sqrt(energy) : 1.0f;
+
+    const float impactEnergy =
+        0.075f + 1.05f * std::pow(velocity, 1.22f);
+
+    const float baseDecaySeconds =
+        juce::jmap(damping01, 0.0f, 1.0f, 1.85f, 0.42f);
+
+    configureVoice(voice, topTuningHz, baseDecaySeconds);
+
+    for (int i = 0; i < NumModes; ++i)
+    {
+        auto& mode = voice.modes[(size_t) i];
+
+        mode.amplitude =
+            weights[(size_t) i] * normalizer * impactEnergy;
+
+        mode.amplitude *=
+            1.0f + 0.018f * static_cast<float>(i) * velocity;
+    }
+
+    // A real hit changes the pressure inside the shell immediately.
+    // Keeping the cavity state here makes fast MIDI repetitions interact
+    // with the previous hit instead of resetting the acoustic space.
+    airVelocity += 0.0025f * impactEnergy * (0.65f + 0.35f * velocity);
+}
+
+void SnareMembraneModel::driveBottomFromAir(float pressure, float coupling)
+{
+    if (std::abs(pressure) < 1.0e-7f)
+        return;
+
+    int voiceIndex = findActiveVoice(bottomHead);
+
+    if (voiceIndex < 0)
+    {
+        voiceIndex = chooseVoice(bottomHead);
+        auto& voice = bottomHead.voices[(size_t) voiceIndex];
+
+        voice.active = true;
+        voice.age = ++ageCounter;
+
+        const float baseDecaySeconds =
+            juce::jmap(damping01, 0.0f, 1.0f, 1.55f, 0.34f);
+
+        configureVoice(voice, bottomTuningHz, baseDecaySeconds);
+
+        for (auto& mode : voice.modes)
+            mode.amplitude = 0.0f;
+    }
+
+    auto& voice = bottomHead.voices[(size_t) voiceIndex];
+
+    constexpr float baseDrive = 0.00018f;
+
+    for (int i = 0; i < NumModes; ++i)
+    {
+        const auto& spec = modeSpecs[(size_t) i];
+        auto& mode = voice.modes[(size_t) i];
+
+        const float modeWeight =
+            (1.0f / (1.0f + 0.11f * static_cast<float>(i))) *
+            (spec.angularOrder == 0 ? 1.0f : 0.88f);
+
+        mode.amplitude += pressure * coupling * baseDrive * modeWeight;
+
+        // Bound the accumulated modal energy so aggressive MIDI streams
+        // cannot destabilize the cavity/head feedback loop.
+        mode.amplitude = juce::jlimit(-0.16f, 0.16f, mode.amplitude);
+    }
+}
+
+void SnareMembraneModel::applyTopAirFeedback(float pressure, float coupling)
+{
+    const int voiceIndex = findActiveVoice(topHead);
+
+    if (voiceIndex < 0)
+        return;
+
+    auto& voice = topHead.voices[(size_t) voiceIndex];
+
+    for (int i = 0; i < NumModes; ++i)
+    {
+        auto& mode = voice.modes[(size_t) i];
+
+        const float feedbackWeight =
+            i == 0 ? 1.0f : 0.35f / (1.0f + 0.08f * static_cast<float>(i));
+
+        mode.amplitude -=
+            pressure * coupling * 0.000045f * feedbackWeight;
+
+        mode.amplitude = juce::jlimit(-0.16f, 0.16f, mode.amplitude);
+    }
+}
+
+float SnareMembraneModel::processHead(Head& head)
 {
     float mix = 0.0f;
 
-    for (auto& voice : voices)
+    for (auto& voice : head.voices)
     {
         if (!voice.active)
             continue;
@@ -131,10 +247,11 @@ float SnareMembraneModel::processSample()
             {
                 audible = true;
                 voiceOutput += mode.amplitude * std::sin(mode.phase);
+
                 mode.phase += mode.phaseStep;
 
-                if (mode.phase >= juce::MathConstants<float>::twoPi)
-                    mode.phase -= juce::MathConstants<float>::twoPi;
+                if (mode.phase >= kTwoPi)
+                    mode.phase -= kTwoPi;
 
                 mode.amplitude *= mode.decayPerSample;
             }
@@ -149,23 +266,59 @@ float SnareMembraneModel::processSample()
         mix += voiceOutput;
     }
 
-    // Keep the linear modal model inside a predictable output envelope.
     return std::tanh(mix * 0.72f) * 0.72f;
+}
+
+float SnareMembraneModel::processSample()
+{
+    const float topBeforeCoupling = processHead(topHead);
+    const float bottomBeforeCoupling = processHead(bottomHead);
+
+    // Normalised cavity dynamics. The shell cavity stores acoustic energy
+    // and exchanges it with both heads. This is deliberately conservative
+    // at Stage 3 so later shell/snare-wire stages can add energy safely.
+    const float difference =
+        juce::jlimit(-1.0f, 1.0f, topBeforeCoupling - bottomBeforeCoupling);
+
+    const float cavityFrequencyHz =
+        juce::jlimit(700.0f, 1400.0f, 950.0f + 1.15f * bottomTuningHz);
+
+    const float dt = 1.0f / static_cast<float>(sampleRate);
+    const float omega =
+        kTwoPi * cavityFrequencyHz;
+
+    const float cavityDamping =
+        juce::jmap(damping01, 0.0f, 1.0f, 0.055f, 0.16f);
+
+    const float stiffness = omega * omega;
+
+    const float acceleration =
+        (difference - airDisplacement) * stiffness * 0.035f
+        - cavityDamping * omega * airVelocity;
+
+    airVelocity += acceleration * dt;
+    airDisplacement += airVelocity * dt;
+
+    airDisplacement = juce::jlimit(-0.08f, 0.08f, airDisplacement);
+    airVelocity = juce::jlimit(-90.0f, 90.0f, airVelocity);
+
+    const float pressure =
+        juce::jlimit(-0.12f, 0.12f, airDisplacement * 2.4f);
+
+    const float coupling = airCoupling01;
+
+    driveBottomFromAir(pressure, coupling);
+    applyTopAirFeedback(pressure, coupling);
+
+    const float top = topBeforeCoupling - pressure * 0.015f;
+    const float bottom = processHead(bottomHead) * 0.94f + pressure * 0.025f;
+
+    return std::tanh((top + bottom * 0.80f) * 0.86f) * 0.78f;
 }
 
 float SnareMembraneModel::besselJ(int order, float x)
 {
-    return besselJn((int) order, x);
-}
-
-float SnareMembraneModel::besselJ0(float x)
-{
-    return besselJn(0, x);
-}
-
-float SnareMembraneModel::besselJ1(float x)
-{
-    return besselJn(1, x);
+    return besselJn(order, x);
 }
 
 float SnareMembraneModel::besselJn(int order, float x)
@@ -175,33 +328,34 @@ float SnareMembraneModel::besselJn(int order, float x)
     if (std::abs(x) < 1.0e-6f)
         return n == 0 ? 1.0f : 0.0f;
 
-    // Series evaluation is stable for the limited spatial range used by
-    // the membrane modes (all arguments remain below about 10.2).
-    float sum = 0.0f;
-
-    const double halfX = (double) x * 0.5;
+    const double halfX = static_cast<double>(x) * 0.5;
     double power = 1.0;
 
     for (int k = 0; k < n; ++k)
         power *= halfX;
 
+    float sum = 0.0f;
+
     for (int k = 0; k < 24; ++k)
     {
         double factorialK = 1.0;
         for (int j = 2; j <= k; ++j)
-            factorialK *= (double) j;
+            factorialK *= static_cast<double>(j);
 
         double factorialNK = 1.0;
         for (int j = 2; j <= k + n; ++j)
-            factorialNK *= (double) j;
+            factorialNK *= static_cast<double>(j);
 
-        double numerator = power * std::pow(halfX * halfX, (double) k);
-        double term = numerator / (factorialK * factorialNK);
+        double numerator =
+            power * std::pow(halfX * halfX, static_cast<double>(k));
+
+        double term =
+            numerator / (factorialK * factorialNK);
 
         if (k & 1)
             term = -term;
 
-        sum += (float) term;
+        sum += static_cast<float>(term);
 
         if (std::abs(term) < 1.0e-10)
             break;
