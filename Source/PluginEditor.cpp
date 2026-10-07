@@ -63,6 +63,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     setupKnob(roomReverbSlider, roomReverbLabel, "ROOM REVERB", processor.getRoomReverbMix(), [this](float v){ processor.setRoomReverbMix(v); });
     setupKnob(physicalSynthSlider, physicalSynthLabel, "PHYSICAL SYNTH", processor.getPhysicalSynthMix(), [this](float v){ processor.setPhysicalSynthMix(v); });
     setupKnob(wireCollisionSlider, wireCollisionLabel, "WIRE COLLISION", processor.getWireCollisionMix(), [this](float v){ processor.setWireCollisionMix(v); });
+    setupKnob(hitPositionSlider, hitPositionLabel, "HIT POSITION", processor.getHitPositionMorph(), [this](float v){ processor.setHitPositionMorph(v); });
+    hitPositionSlider.setNumDecimalPlacesToDisplay(0);
     setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
     setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
     setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
@@ -367,6 +369,8 @@ void BlackDrumAudioProcessorEditor::resized()
     physicalSynthSlider.setBounds(296, 450, 64, 64);
     wireCollisionLabel.setBounds(396, 430, 112, 20);
     wireCollisionSlider.setBounds(420, 450, 64, 64);
-    savePresetButton.setBounds(505, 455, 170, 36);
-    loadPresetButton.setBounds(700, 455, 170, 36);
+    hitPositionLabel.setBounds(520, 430, 112, 20);
+    hitPositionSlider.setBounds(544, 450, 64, 64);
+    savePresetButton.setBounds(625, 455, 120, 36);
+    loadPresetButton.setBounds(755, 455, 120, 36);
 }
