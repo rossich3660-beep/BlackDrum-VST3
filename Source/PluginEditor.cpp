@@ -65,6 +65,8 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     setupKnob(wireCollisionSlider, wireCollisionLabel, "WIRE COLLISION", processor.getWireCollisionMix(), [this](float v){ processor.setWireCollisionMix(v); });
     setupKnob(hitPositionSlider, hitPositionLabel, "HIT POSITION", processor.getHitPositionMorph(), [this](float v){ processor.setHitPositionMorph(v); });
     hitPositionSlider.setNumDecimalPlacesToDisplay(0);
+    hitPositionSlider.setTooltip("0% = CENTER, 50% = MID, 100% = EDGE");
+    hitPositionLabel.setTooltip("Manual strike position: CENTER -> MID -> EDGE");
     setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
     setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
     setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
@@ -235,6 +237,7 @@ void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
     roomReverbSlider.setValue(processor.getRoomReverbMix(), juce::dontSendNotification);
     physicalSynthSlider.setValue(processor.getPhysicalSynthMix(), juce::dontSendNotification);
     wireCollisionSlider.setValue(processor.getWireCollisionMix(), juce::dontSendNotification);
+    hitPositionSlider.setValue(processor.getHitPositionMorph(), juce::dontSendNotification);
     membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
     tensionSlider.setValue(processor.getMembraneTension(), juce::dontSendNotification);
     stiffnessSlider.setValue(processor.getMembraneStiffness(), juce::dontSendNotification);
