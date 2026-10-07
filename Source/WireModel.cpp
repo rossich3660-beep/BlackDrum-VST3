@@ -4,6 +4,7 @@
 namespace
 {
 constexpr float kTwoPi = juce::MathConstants<float>::twoPi;
+constexpr float kMaxForce = 5.0f;
 }
 
 void SnareWireModel::prepare(double rate)
@@ -17,6 +18,7 @@ void SnareWireModel::reset()
 {
     triggerEnergy = 0.0f;
     triggerDecayPerSample = 0.97f;
+    previousHeadVelocity = 0.0f;
     randomState = 0xA341316Cu;
 
     for (auto& wire : wires)
@@ -28,71 +30,116 @@ void SnareWireModel::setParameters(
     float newContact01,
     float newDamping01)
 {
-    snareTension01 =
-        juce::jlimit(0.0f, 1.0f, newSnareTension01);
+    snareTension01 = juce::jlimit(
+        0.0f, 1.0f, newSnareTension01);
 
-    contact01 =
-        juce::jlimit(0.0f, 1.0f, newContact01);
+    contact01 = juce::jlimit(
+        0.0f, 1.0f, newContact01);
 
-    damping01 =
-        juce::jlimit(0.0f, 1.0f, newDamping01);
+    damping01 = juce::jlimit(
+        0.0f, 1.0f, newDamping01);
 
     updateWires();
 }
 
 void SnareWireModel::updateWires()
 {
-    // Snare wires are intentionally in a broad, high-frequency band.
-    // Their irregularity keeps the group from behaving like one oscillator.
-    const float baseFrequency =
+    // A real wire is a tensioned string with several partials. The audible
+    // result is therefore dominated by contact impulses and string velocity,
+    // not by a bank of free-running sine oscillators.
+    const float fundamentalHz =
         juce::jmap(
             snareTension01,
-            1750.0f,
-            3600.0f);
+            260.0f,
+            920.0f);
 
     for (int i = 0; i < NumWires; ++i)
     {
         auto& wire = wires[(size_t) i];
 
-        const float index =
-            static_cast<float>(i);
+        const float wireScale =
+            tensionScale[(size_t) i];
 
-        const float frequency =
-            juce::jlimit(
-                1200.0f,
-                6200.0f,
-                baseFrequency
-                * wireRatios[(size_t) i]
-                * wireIrregularity[(size_t) i]);
+        const float gapVariation =
+            gapScale[(size_t) i];
 
-        wire.cosine =
-            std::cos(
-                kTwoPi
-                * frequency
-                / static_cast<float>(sampleRate));
+        wire.gap =
+            0.0016f
+            + 0.0028f * (1.0f - contact01)
+            + 0.0010f * (gapVariation - 1.0f);
 
-        const float highWire =
-            index
-            / static_cast<float>(NumWires - 1);
+        wire.spring =
+            1.8f
+            + 4.6f * contact01
+            + 0.6f * snareTension01;
 
-        const float decaySeconds =
-            juce::jlimit(
-                0.018f,
-                0.15f,
-                0.095f
-                * (1.05f - 0.32f * highWire)
-                * (1.08f - 0.28f * damping01)
-                * (0.78f + 0.42f * snareTension01));
+        wire.contactDamping =
+            0.055f
+            + 0.11f * contact01
+            + 0.05f * damping01;
 
-        wire.radius =
-            std::exp(
-                -1.0f
-                / (decaySeconds
-                   * static_cast<float>(sampleRate)));
+        wire.roughness =
+            0.0004f
+            + 0.0016f * contact01
+            + 0.0005f * std::abs(wireScale - 1.0f);
 
-        wire.gain =
-            (0.030f + 0.035f * contact01)
-            / (1.0f + 0.09f * index);
+        wire.outputGain =
+            (0.035f + 0.042f * contact01)
+            / (1.0f + 0.08f * static_cast<float>(i));
+
+        const float modeSpread =
+            1.0f + 0.012f * static_cast<float>(i);
+
+        for (int modeIndex = 0; modeIndex < NumStringModes; ++modeIndex)
+        {
+            auto& mode =
+                wire.modes[(size_t) modeIndex];
+
+            const float harmonic =
+                static_cast<float>(modeIndex + 1);
+
+            // Small stiffness/length irregularity makes the string bank
+            // inharmonic without turning it into ten obvious pitches.
+            const float stiffnessShift =
+                1.0f
+                + 0.012f * harmonic * harmonic
+                + 0.004f * randomBipolar();
+
+            const float frequency =
+                juce::jlimit(
+                    180.0f,
+                    5200.0f,
+                    fundamentalHz
+                    * wireScale
+                    * harmonic
+                    * modeSpread
+                    * stiffnessShift);
+
+            const float omega =
+                kTwoPi * frequency;
+
+            const float decaySeconds =
+                juce::jlimit(
+                    0.012f,
+                    0.085f,
+                    0.050f
+                    * (1.08f - 0.38f * damping01)
+                    * (0.78f + 0.44f * contact01)
+                    / (1.0f + 0.13f * static_cast<float>(modeIndex)));
+
+            mode.omega = omega;
+            mode.damping =
+                1.0f / decaySeconds;
+
+            mode.weight =
+                1.0f
+                / (1.0f
+                   + 0.42f
+                     * static_cast<float>(modeIndex));
+
+            if (modeIndex == 0)
+                mode.weight *= 0.80f;
+        }
     }
 }
 
@@ -104,14 +151,16 @@ void SnareWireModel::trigger(
         juce::jlimit(0.0f, 1.0f, velocity01);
 
     const float impulse =
-        impactEnergy
-        * (0.008f + 0.022f * contact01)
-        * (0.45f + 0.55f * velocity);
-
-    triggerEnergy =
         juce::jlimit(
             0.0f,
-            0.35f,
+            0.45f,
+            impactEnergy
+            * (0.012f + 0.025f * contact01)
+            * (0.5f + 0.5f * velocity));
+
+    triggerEnergy =
+        juce::jmin(
+            0.45f,
             triggerEnergy + impulse);
 
     triggerDecayPerSample =
@@ -119,120 +168,204 @@ void SnareWireModel::trigger(
             -1.0f
             / (juce::jmap(
                 velocity,
-                0.012f,
-                0.0035f)
+                0.015f,
+                0.0040f)
                * static_cast<float>(sampleRate)));
 
-    for (auto& wire : wires)
+    // A strike slightly redistributes the resting slack of each wire.
+    for (int i = 0; i < NumWires; ++i)
     {
+        auto& wire = wires[(size_t) i];
+
+        const float variation =
+            0.85f
+            + 0.30f
+              * (0.5f + 0.5f * randomBipolar());
+
         wire.contactState =
             juce::jlimit(
                 0.0f,
-                0.7f,
+                1.0f,
                 wire.contactState
-                + 0.04f
+                + 0.08f
                   * contact01
-                  * (0.5f + 0.5f * velocity));
+                  * variation
+                  * (0.35f + 0.65f * velocity));
 
-        // Small phase-state perturbation creates different re-contact
-        // timing between wires after repeated hits.
-        wire.y1 += 0.008f * randomBipolar() * velocity;
+        for (auto& mode : wire.modes)
+        {
+            mode.velocity +=
+                0.0025f
+                * randomBipolar()
+                * velocity;
+        }
     }
 }
 
 float SnareWireModel::processSample(
-    float bottomDisplacement)
+    float bottomDisplacement,
+    float bottomVelocity)
 {
-    const float bottom =
-        juce::jlimit(-1.0f, 1.0f, bottomDisplacement);
+    const float dt =
+        1.0f / static_cast<float>(sampleRate);
+
+    const float head =
+        juce::jlimit(
+            -1.0f,
+            1.0f,
+            bottomDisplacement);
+
+    const float headVelocity =
+        juce::jlimit(
+            -25.0f,
+            25.0f,
+            bottomVelocity);
 
     triggerEnergy *= triggerDecayPerSample;
 
-    float output = 0.0f;
+    float outputVelocity = 0.0f;
+    float outputContact = 0.0f;
 
     for (int i = 0; i < NumWires; ++i)
     {
         auto& wire = wires[(size_t) i];
 
-        // The wire follows the lower head only while it is in contact.
-        // The positive part produces one-sided mechanical compression.
-        const float relativeMotion =
-            bottom - 0.52f * wire.y1;
+        float displacement = 0.0f;
+        float velocity = 0.0f;
 
-        const float threshold =
-            0.008f
-            + 0.025f * (1.0f - contact01);
+        for (auto& mode : wire.modes)
+        {
+            displacement += mode.displacement * mode.weight;
+            velocity += mode.velocity * mode.weight;
+        }
 
-        const float compression =
+        const float relativePosition =
+            head - displacement - wire.gap;
+
+        const float relativeVelocity =
+            headVelocity - velocity;
+
+        // One-sided contact: the head can compress the wire against the
+        // snare bed, but the wire can freely lift away from the head.
+        const float penetration =
             juce::jmax(
                 0.0f,
-                relativeMotion - threshold);
+                relativePosition);
 
         const float closingVelocity =
-            relativeMotion - wire.previousContact;
-
-        wire.previousContact =
-            relativeMotion;
-
-        const float slip =
             juce::jmax(
                 0.0f,
-                closingVelocity)
-            * (0.55f + 0.85f * contact01);
+                relativeVelocity);
 
-        const float recontact =
+        const float openingVelocity =
+            juce::jmax(
+                0.0f,
+                -relativeVelocity);
+
+        const float contactBuild =
             juce::jlimit(
                 0.0f,
                 1.0f,
-                0.86f * wire.contactState
-                + 0.22f * compression
-                + 0.08f * juce::jmax(0.0f, slip));
+                0.74f * wire.contactState
+                + 0.22f * penetration * 18.0f
+                + 0.10f * closingVelocity);
 
         wire.contactState =
-            recontact
-            * (0.992f - 0.012f * damping01);
+            contactBuild
+            * (0.985f - 0.020f * damping01);
 
-        // Tangential friction produces the characteristic wire buzz.
-        const float frictionNoise =
+        // Kelvin-Voigt contact: spring force plus velocity-dependent
+        // compression. No contact means no force.
+        const float nonlinearSpring =
+            wire.spring
+            * penetration
+            * (1.0f + 2.4f * penetration);
+
+        const float damperForce =
+            wire.contactDamping
+            * closingVelocity;
+
+        // Re-contact is deliberately softer than continuous compression.
+        const float impactForce =
+            (nonlinearSpring + damperForce)
+            * (0.42f + 0.88f * contact01)
+            * (0.35f + 0.65f * contactBuild);
+
+        const float friction =
+            contactBuild
+            * std::tanh(
+                relativeVelocity
+                * (0.55f + 1.10f * contact01))
+            * (0.003f + 0.008f * contact01);
+
+        const float force =
+            juce::jlimit(
+                -kMaxForce,
+                kMaxForce,
+                impactForce + friction + triggerEnergy * 0.025f);
+
+        const float contactImpulse =
+            force - wire.previousForce;
+
+        wire.previousForce =
+            force;
+
+        float wireAcceleration = 0.0f;
+
+        for (auto& mode : wire.modes)
+        {
+            const float modalDrive =
+                force * mode.weight;
+
+            const float acceleration =
+                modalDrive
+                - 2.0f * mode.damping * mode.velocity
+                - mode.omega * mode.omega * mode.displacement;
+
+            mode.velocity +=
+                acceleration * dt;
+
+            mode.displacement +=
+                mode.velocity * dt;
+        }
+
+        // When the head opens away, the wire can snap out of contact. The
+        // stored state decays naturally instead of being forced to follow it.
+        if (openingVelocity > 0.0f)
+        {
+            wire.contactState *=
+                std::exp(
+                    -openingVelocity
+                    * (2.0f + 4.0f * contact01)
+                    * dt);
+        }
+
+        const float microRoughness =
             randomBipolar()
-            * compression
-            * (0.015f + 0.045f * contact01);
+            * wire.roughness
+            * contactBuild
+            * (0.18f + 0.42f * std::abs(relativeVelocity));
 
-        const float contactDrive =
-            std::tanh(
-                3.2f * (
-                    compression
-                    * (0.65f + 0.95f * contact01)
-                    + slip * 0.32f
-                    + triggerEnergy
-                    * 0.12f));
+        outputVelocity +=
+            velocity
+            * wire.outputGain;
 
-        const float radius = wire.radius;
-        const float feedback =
-            2.0f * radius * wire.cosine * wire.y1
-            - radius * radius * wire.y2;
-
-        const float excitation =
-            (1.0f - radius * radius)
-            * contactDrive;
-
-        const float y0 =
-            feedback
-            + excitation
-            + frictionNoise * 0.035f;
-
-        wire.y2 = wire.y1;
-        wire.y1 = juce::jlimit(-1.2f, 1.2f, y0);
-
-        output +=
-            wire.y1
-            * wire.gain
-            * (0.65f + 0.35f * recontact);
+        outputContact +=
+            contactImpulse
+            * wire.outputGain
+            * (0.008f + 0.014f * contact01)
+            + microRoughness;
     }
 
-    // A little nonlinear saturation keeps the ten-wire bank together as one
-    // physical snare system rather than sounding like ten separate tones.
-    return std::tanh(output * 2.4f) * 0.62f;
+    previousHeadVelocity = headVelocity;
+
+    // The microphone hears mainly velocity/recontact energy, not the static
+    // displacement of the wire. A gentle saturation keeps bursts natural.
+    const float raw =
+        0.72f * outputVelocity
+        + 0.28f * outputContact;
+
+    return std::tanh(raw * 1.7f) * 0.56f;
 }
 
 float SnareWireModel::randomBipolar() noexcept
