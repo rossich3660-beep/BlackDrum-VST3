@@ -208,8 +208,13 @@ void PhysicalSnareAudioProcessor::processBlock(
         const float bottomContact =
             membrane.getBottomContactSignal();
 
+        const float bottomContactVelocity =
+            membrane.getBottomContactVelocity();
+
         const float wireSample =
-            snareWires.processSample(bottomContact);
+            snareWires.processSample(
+                bottomContact,
+                bottomContactVelocity);
 
         const float combinedSample =
             shellSample
