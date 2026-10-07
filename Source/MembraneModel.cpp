@@ -62,7 +62,7 @@ int SnareMembraneModel::chooseVoice(Head& head) noexcept
     return oldest;
 }
 
-int SnareMembraneModel::findActiveVoice(const Head& head) const
+int SnareMembraneModel::findActiveVoice(const Head& head) const noexcept
 {
     int best = -1;
     unsigned int bestAge = 0;
