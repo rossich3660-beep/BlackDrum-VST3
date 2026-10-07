@@ -53,6 +53,7 @@ void BlackDrumAudioProcessor::resetPhaseVocoder()
     pvInputWrite = 0;
     pvHopCounter = 0;
     pvSampleCounter = 0;
+    pvPreviousFrameEnergy = 0.0f;
 }
 
 float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmount, float velocity)
@@ -83,6 +84,19 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
             pvFFTBuffer[(size_t) n] = pvInputRing[(size_t) ringIndex] * window;
             pvFFTBuffer[(size_t) (n + pvFFTSize)] = 0.0f;
         }
+
+        // Detect a rising frame energy and temporarily reduce spectral reshaping.
+        // This protects the snare attack while leaving the body/tail free to morph.
+        float frameEnergy = 0.0f;
+        for (int n = 0; n < pvFFTSize; ++n)
+            frameEnergy += pvFFTBuffer[(size_t) n] * pvFFTBuffer[(size_t) n];
+        frameEnergy = std::sqrt(frameEnergy / (float) pvFFTSize);
+        const float energyRise = frameEnergy - pvPreviousFrameEnergy;
+        const float transient = juce::jlimit(0.0f, 1.0f,
+            energyRise / (0.015f + 0.35f * frameEnergy + 1.0e-6f));
+        pvPreviousFrameEnergy += 0.20f * (frameEnergy - pvPreviousFrameEnergy);
+        const float safeMorphAmount = morphAmount
+            * (0.35f + 0.65f * (1.0f - transient));
 
         phaseVocoderFFT.performRealOnlyForwardTransform(pvFFTBuffer.data());
 
@@ -126,7 +140,7 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
             const float highLift = std::pow(normalizedFrequency, 1.35f) * (0.85f + 0.75f * velocity);
             const float lowTrim = (1.0f - normalizedFrequency) * (0.30f + 0.20f * (1.0f - velocity));
             const float targetGain = juce::jlimit(0.25f, 2.5f, 1.0f + highLift - lowTrim);
-            const float morphedMagnitude = magnitude * ((1.0f - morphAmount) + morphAmount * targetGain);
+            const float morphedMagnitude = magnitude * ((1.0f - safeMorphAmount) + safeMorphAmount * targetGain);
 
             const float outReal = morphedMagnitude * std::cos(pvSynthesisPhase[(size_t) k]);
             const float outImag = morphedMagnitude * std::sin(pvSynthesisPhase[(size_t) k]);
