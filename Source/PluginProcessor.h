@@ -129,8 +129,8 @@ private:
     float hitMicroAttackPosition = 0.0f;
     float hitMicroPhase = 0.0f;
     float hitMicroDecay = 1.0f;
-        // Per-hit membrane tension kick: short pitch motion after the attack.
-        float pitchKickAge = 0.0f;
+    // Global physical-model pitch kick follows the most recent MIDI strike.
+    float pitchKickAge = 0.0f;
     std::atomic<float> spectralMix { 0.0f };
     // Phase-vocoder spectral morphing: a deliberately small STFT layer blended
     // with the direct drum signal. It uses fixed-size, allocation-free state.
