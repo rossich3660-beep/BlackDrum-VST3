@@ -12,7 +12,7 @@ PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
     title.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(title);
 
-    stageLabel.setText("STAGE 1  •  MIDI ENGINE", juce::dontSendNotification);
+    stageLabel.setText("STAGE 1  -  MIDI ENGINE", juce::dontSendNotification);
     stageLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::plain)));
     stageLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff9d32));
     addAndMakeVisible(stageLabel);
@@ -57,7 +57,7 @@ void PhysicalSnareAudioProcessorEditor::timerCallback()
     }
     else
     {
-        midiLabel.setText("MIDI NOTE  —", juce::dontSendNotification);
+        midiLabel.setText("MIDI NOTE  -", juce::dontSendNotification);
     }
 
     velocityLabel.setText(
