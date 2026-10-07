@@ -20,6 +20,7 @@ void SnareMembraneModel::reset()
     samplesSinceLastHit = 1000000;
     airDisplacement = 0.0f;
     airVelocity = 0.0f;
+    lastBottomContact = 0.0f;
 
     for (auto* head : { &topHead, &bottomHead })
     {
@@ -571,6 +572,13 @@ float SnareMembraneModel::processSample()
     const float bottom =
         bottomBeforeCoupling * bottomOutputGain
         + pressure * (0.018f + 0.050f * coupling);
+
+    lastBottomContact =
+        juce::jlimit(
+            -1.0f,
+            1.0f,
+            bottomBeforeCoupling
+            + pressure * (0.035f + 0.045f * coupling));
 
     const float coupledMix =
         top + bottom * (0.55f + 0.25f * coupling);
