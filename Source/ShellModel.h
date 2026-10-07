@@ -47,6 +47,6 @@ private:
     float previousExcitation = 0.0f;
 
     static constexpr std::array<float, NumModes> modeRatios {{
-        0.72f, 1.00f, 1.27f, 1.58f, 1.94f, 2.38f, 2.92f, 3.55f
+        0.58f, 0.80f, 1.00f, 1.24f, 1.52f, 1.84f, 2.20f, 2.62f
     }};
 };
