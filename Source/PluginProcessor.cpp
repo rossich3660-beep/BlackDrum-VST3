@@ -690,17 +690,13 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                                 * sensitivity * noiseGate;
                             stringCollision += wireNoise * noiseGain;
 
-                            // Short metallic contact impulse. Its frequency and phase vary
-                            // slightly per wire, preventing a single resonant whistle.
-                            const float contactFreq = juce::jmin(
-                                2350.0f + 1850.0f * p + 420.0f * sensitivity
-                                + 520.0f * vce.velocity, 0.43f * sr);
-                            const float contactW = 2.0f
-                                * juce::MathConstants<float>::pi * contactFreq / sr;
-                            const float phase = phaseOffset * 0.003f + p * 0.9f;
-                            const float metallic = std::sin(phase)
-                                * gate * energy * (0.0012f + 0.0028f * vce.velocity);
-                            stringCollision += metallic * std::sin(contactW * (float)vce.position);
+                            // Do not synthesize a fixed high-frequency sine here.
+                            // That produced a bell-like whistle when several wires
+                            // lined up in the upper partials. The collision layer is
+                            // intentionally noise/impact based instead.
+                            const float contactBurst = collisionKick * gate
+                                * (0.0020f + 0.0035f * vce.velocity);
+                            stringCollision += noiseState * contactBurst;
 
                             stringGateSum += gate;
                         }
