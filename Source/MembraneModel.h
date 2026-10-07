@@ -42,6 +42,10 @@ private:
         bool active = false;
         unsigned int age = 0;
         float nonlinearAmount = 0.0f;
+        float attackLevel = 0.0f;
+        float attackDecayPerSample = 1.0f;
+        float attackFilter = 0.0f;
+        float attackPreviousNoise = 0.0f;
     };
 
     struct Head
