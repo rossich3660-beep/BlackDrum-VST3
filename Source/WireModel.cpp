@@ -103,7 +103,7 @@ void SnareWireModel::updateWires()
             const float stiffnessShift =
                 1.0f
                 + 0.012f * harmonic * harmonic
-                + 0.004f * randomBipolar();
+                + 0.002f * (wireScale - 1.0f);
 
             const float frequency =
                 juce::jlimit(
@@ -309,8 +309,6 @@ float SnareWireModel::processSample(
 
         wire.previousForce =
             force;
-
-        float wireAcceleration = 0.0f;
 
         for (auto& mode : wire.modes)
         {
