@@ -159,6 +159,9 @@ private:
     std::array<float, pvRingSize> pvNormRing {};
     std::array<float, pvBins> pvPreviousPhase {};
     std::array<float, pvBins> pvSynthesisPhase {};
+    std::array<float, pvBins> pvPreviousMagnitude {};
+    std::array<float, pvBins> pvCurrentMagnitude {};
+    std::array<float, pvBins> pvCurrentPhase {};
     int pvInputWrite = 0;
     int pvHopCounter = 0;
     uint64_t pvSampleCounter = 0;
