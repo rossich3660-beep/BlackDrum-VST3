@@ -58,15 +58,15 @@ void SnareShellModel::updateModes()
         0.5f * (topTuningHz + bottomTuningHz);
 
     const float depthScale =
-        1.16f - 0.30f * depth01;
+        1.02f - 0.18f * depth01;
 
     const float stiffnessScale =
-        0.92f + 0.24f * shell01;
+        0.94f + 0.12f * shell01;
 
     const float bodyFundamental =
         juce::jlimit(
-            110.0f,
-            420.0f,
+            90.0f,
+            320.0f,
             headAverage * depthScale * stiffnessScale);
 
     for (int i = 0; i < NumModes; ++i)
@@ -118,12 +118,12 @@ void SnareShellModel::updateModes()
 
         mode.drive =
             (1.0f - mode.radius)
-            * (0.55f + 0.85f * shell01)
-            * (1.0f - 0.34f * highMode * damping01);
+            * (0.28f + 0.42f * shell01)
+            * (1.0f - 0.48f * highMode * damping01);
 
         mode.outputGain =
-            (0.22f + 0.20f * shell01)
-            / (1.0f + 0.18f * index);
+            (0.055f + 0.075f * shell01)
+            / (1.0f + 0.24f * index);
     }
 }
 
@@ -138,7 +138,7 @@ void SnareShellModel::trigger(
     // edges and lugs. The short pulse is separate from membrane resonance.
     const float shellImpact =
         impactEnergy
-        * (0.045f + 0.085f * shell01)
+        * (0.018f + 0.038f * shell01)
         * (0.70f + 0.30f * velocity);
 
     impactState =
@@ -152,8 +152,8 @@ void SnareShellModel::trigger(
             -1.0f
             / (juce::jmap(
                 velocity,
-                0.0045f,
-                0.0018f)
+                        0.0060f,
+                0.0026f)
                * static_cast<float>(sampleRate)));
 }
 
@@ -171,9 +171,9 @@ float SnareShellModel::processSample(float membraneSample)
     previousExcitation = membraneSample;
 
     const float excitation =
-        0.74f * membraneSample
-        + 0.42f * membraneDifference
-        + 0.55f * contact;
+        0.56f * membraneSample
+        + 0.20f * membraneDifference
+        + 0.18f * contact;
 
     float body = 0.0f;
 
@@ -198,13 +198,14 @@ float SnareShellModel::processSample(float membraneSample)
         body += mode.y1 * mode.outputGain;
     }
 
+    // The shell colors the drum rather than becoming a second instrument.
     const float shellAmount =
-        0.18f + 0.40f * shell01;
+        0.075f + 0.17f * shell01;
 
     const float coupled =
         membraneSample
         + body * shellAmount
-        + contact * (0.045f + 0.08f * shell01);
+        + contact * (0.012f + 0.030f * shell01);
 
-    return std::tanh(coupled * 0.95f) * 0.82f;
+    return std::tanh(coupled * 0.92f) * 0.82f;
 }
