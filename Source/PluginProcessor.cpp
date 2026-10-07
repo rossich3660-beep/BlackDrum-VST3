@@ -4,14 +4,62 @@
 PhysicalSnareAudioProcessor::PhysicalSnareAudioProcessor()
     : AudioProcessor(
         BusesProperties()
-            .withOutput("Output", juce::AudioChannelSet::stereo(), true))
+            .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+      parameters(
+          *this,
+          nullptr,
+          "PARAMETERS",
+          createParameterLayout())
 {
+    tuningParameter = parameters.getRawParameterValue("TUNE");
+    dampingParameter = parameters.getRawParameterValue("DAMP");
+    hitPositionParameter = parameters.getRawParameterValue("HITPOS");
+    levelParameter = parameters.getRawParameterValue("LEVEL");
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout
+PhysicalSnareAudioProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "TUNE",
+        "Tune",
+        juce::NormalisableRange<float>(90.0f, 360.0f, 0.1f),
+        185.0f,
+        "Hz"));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "DAMP",
+        "Damping",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f),
+        0.40f));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "HITPOS",
+        "Hit Position",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f),
+        0.35f));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "LEVEL",
+        "Level",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f),
+        0.75f));
+
+    return { params.begin(), params.end() };
 }
 
 void PhysicalSnareAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    currentSampleRate = sampleRate > 0.0 ? sampleRate : 44100.0;
+    currentSampleRate = sampleRate > 1000.0 ? sampleRate : 44100.0;
     currentBlockSize = juce::jmax(0, samplesPerBlock);
+
+    membrane.prepare(currentSampleRate);
+    membrane.setParameters(
+        tuningParameter != nullptr ? tuningParameter->load() : 185.0f,
+        dampingParameter != nullptr ? dampingParameter->load() : 0.40f,
+        hitPositionParameter != nullptr ? hitPositionParameter->load() : 0.35f);
 
     lastMidiNote.store(-1, std::memory_order_relaxed);
     lastMidiVelocity.store(0, std::memory_order_relaxed);
@@ -21,6 +69,7 @@ void PhysicalSnareAudioProcessor::prepareToPlay(double sampleRate, int samplesPe
 void PhysicalSnareAudioProcessor::releaseResources()
 {
     currentBlockSize = 0;
+    membrane.reset();
 }
 
 void PhysicalSnareAudioProcessor::processBlock(
@@ -28,31 +77,50 @@ void PhysicalSnareAudioProcessor::processBlock(
     juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-
-    // Stage 1 intentionally produces silence.
-    // This guarantees that MIDI reception and plugin lifecycle can be
-    // validated before any physical-model DSP is introduced.
     buffer.clear();
 
-    for (const auto metadata : midiMessages)
+    membrane.setParameters(
+        tuningParameter != nullptr ? tuningParameter->load() : 185.0f,
+        dampingParameter != nullptr ? dampingParameter->load() : 0.40f,
+        hitPositionParameter != nullptr ? hitPositionParameter->load() : 0.35f);
+
+    auto event = midiMessages.cbegin();
+    const auto end = midiMessages.cend();
+    const float outputLevel =
+        levelParameter != nullptr ? juce::jlimit(0.0f, 1.0f, levelParameter->load()) : 0.75f;
+
+    for (int sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
     {
-        const auto message = metadata.getMessage();
-
-        if (message.isNoteOn())
+        while (event != end && (*event).samplePosition <= sampleIndex)
         {
-            const int note = message.getNoteNumber();
-            const int velocity = juce::jlimit(
-                0, 127,
-                (int) juce::roundToInt(message.getFloatVelocity() * 127.0f));
+            const auto message = (*event).getMessage();
 
-            lastMidiNote.store(note, std::memory_order_relaxed);
-            lastMidiVelocity.store(velocity, std::memory_order_relaxed);
-            midiEventCount.fetch_add(1, std::memory_order_relaxed);
+            if (message.isNoteOn())
+            {
+                const int note = message.getNoteNumber();
+                const int velocity = juce::jlimit(
+                    0,
+                    127,
+                    juce::roundToInt(message.getFloatVelocity() * 127.0f));
+
+                lastMidiNote.store(note, std::memory_order_relaxed);
+                lastMidiVelocity.store(velocity, std::memory_order_relaxed);
+                midiEventCount.fetch_add(1, std::memory_order_relaxed);
+
+                membrane.trigger(message.getFloatVelocity());
+            }
+            else if (message.isNoteOff())
+            {
+                lastMidiNote.store(-1, std::memory_order_relaxed);
+            }
+
+            ++event;
         }
-        else if (message.isNoteOff())
-        {
-            lastMidiNote.store(-1, std::memory_order_relaxed);
-        }
+
+        const float sample = membrane.processSample() * outputLevel;
+
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            buffer.setSample(ch, sampleIndex, sample);
     }
 }
 
@@ -63,8 +131,11 @@ juce::AudioProcessorEditor* PhysicalSnareAudioProcessor::createEditor()
 
 void PhysicalSnareAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    juce::MemoryOutputStream stream(destData, true);
-    stream.writeDouble(currentSampleRate);
+    const auto state = parameters.copyState();
+    std::unique_ptr<juce::XmlElement> xml(state.createXml());
+
+    if (xml != nullptr)
+        copyXmlToBinary(*xml, destData);
 }
 
 void PhysicalSnareAudioProcessor::setStateInformation(
@@ -74,11 +145,12 @@ void PhysicalSnareAudioProcessor::setStateInformation(
     if (data == nullptr || sizeInBytes <= 0)
         return;
 
-    juce::MemoryInputStream stream(data, static_cast<size_t>(sizeInBytes), false);
-    if (stream.getTotalLength() >= sizeof(double))
-        currentSampleRate = stream.readDouble();
-}
+    std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
 
+    if (xml != nullptr && xml->hasTagName(parameters.state.getType()))
+        parameters.replaceState(juce::ValueTree::fromXml(*xml));
+
+}
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new PhysicalSnareAudioProcessor();
