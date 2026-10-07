@@ -52,7 +52,7 @@ private:
     static float besselJ(int order, float x);
 
     int chooseVoice(Head&) noexcept;
-    int findActiveVoice(Head&) const noexcept;
+    int findActiveVoice(const Head&) const noexcept;
 
     float processHead(Head&);
     void configureVoice(Voice&, float tuningHz, float baseDecaySeconds);
