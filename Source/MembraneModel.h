@@ -41,6 +41,7 @@ private:
         std::array<ModeState, NumModes> modes {};
         bool active = false;
         unsigned int age = 0;
+        float nonlinearAmount = 0.0f;
     };
 
     struct Head
@@ -56,7 +57,9 @@ private:
 
     float processHead(Head&);
     void configureVoice(Voice&, float tuningHz, float baseDecaySeconds);
+    void exciteBottomFromHit(float impactEnergy, float velocity01, float coupling);
     void driveBottomFromAir(float pressure, float coupling);
+    float randomBipolar() noexcept;
     void applyTopAirFeedback(float pressure, float coupling);
 
     Head topHead;
@@ -74,6 +77,8 @@ private:
     float airVelocity = 0.0f;
 
     unsigned int ageCounter = 0;
+    unsigned int randomState = 0x6D2B79F5u;
+    int samplesSinceLastHit = 1000000;
 
     static constexpr std::array<ModeSpec, NumModes> modeSpecs {{
         { 0, 1, 2.4048256f },
