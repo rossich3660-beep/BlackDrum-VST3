@@ -20,6 +20,11 @@ public:
     void trigger(float velocity01);
     float processSample();
 
+    float getBottomContactSignal() const noexcept
+    {
+        return lastBottomContact;
+    }
+
 private:
     struct ModeSpec
     {
@@ -79,6 +84,7 @@ private:
 
     float airDisplacement = 0.0f;
     float airVelocity = 0.0f;
+    float lastBottomContact = 0.0f;
 
     unsigned int ageCounter = 0;
     unsigned int randomState = 0x6D2B79F5u;
