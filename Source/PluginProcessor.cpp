@@ -500,8 +500,8 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             {
                 // Three short resonant wire modes. Each voice has independent
                 // state, so repeated hits do not share an identical wire tail.
-                const float wireFreqs[3] = { 1650.0f, 2850.0f, 4300.0f };
-                const float wireRadii[3] = { 0.935f, 0.915f, 0.885f };
+                const float wireFreqs[3] = { 1250.0f, 1900.0f, 2650.0f };
+                const float wireRadii[3] = { 0.925f, 0.905f, 0.875f };
 
                 for (int vi = 0; vi < voiceLimitForLayers; ++vi)
                 {
@@ -513,7 +513,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                     vce.noiseSeed ^= vce.noiseSeed >> 17;
                     vce.noiseSeed ^= vce.noiseSeed << 5;
                     const float white = ((float)(vce.noiseSeed & 0x00ffffffu) / 8388607.5f) - 1.0f;
-                    vce.noiseLow[fc] += 0.22f * (white - vce.noiseLow[fc]);
+                    vce.noiseLow[fc] += 0.30f * (white - vce.noiseLow[fc]);
                     const float bandNoise = white - vce.noiseLow[fc];
 
                     const int vi0 = (int)vce.position;
@@ -546,7 +546,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                         vce.wireY2[mode][fc] = vce.wireY1[mode][fc];
                         vce.wireY1[mode][fc] = juce::jlimit(-1.5f, 1.5f, y);
                         voiceWire += vce.wireY1[mode][fc]
-                            * (0.020f + 0.035f * vce.velocity)
+                            * (0.012f + 0.022f * vce.velocity)
                             * std::exp(-(float)vce.position
                                 / (float)(sourceRate * (0.11f + 0.10f * vce.velocity)));
                     }
@@ -683,10 +683,10 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                                 (float)(wireIndex + 1) * 12.9898f
                                 + (float)(vce.position + 1.0) * 78.233f
                                 + phaseOffset * 3.17f);
-                            noiseState += 0.16f * (white - noiseState);
-                            const float wireNoise = white - noiseState;
+                            noiseState += 0.28f * (white - noiseState);
+                            const float wireNoise = noiseState;
                             const float noiseGate = gate * (0.20f + 0.80f * energy);
-                            const float noiseGain = (0.0045f + 0.0095f * vce.velocity)
+                            const float noiseGain = (0.0025f + 0.0055f * vce.velocity)
                                 * sensitivity * noiseGate;
                             stringCollision += wireNoise * noiseGain;
 
