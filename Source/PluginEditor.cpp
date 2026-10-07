@@ -19,6 +19,17 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     hint.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
     addAndMakeVisible(hint);
 
+    addAndMakeVisible(synthOnlyButton);
+    synthOnlyButton.setClickingTogglesState(true);
+    synthOnlyButton.setToggleState(processor.isSynthOnly(), juce::dontSendNotification);
+    synthOnlyButton.onClick = [this]
+    {
+        const bool enabled = synthOnlyButton.getToggleState();
+        processor.setSynthOnly(enabled);
+        hint.setText(enabled ? "SYNTH ONLY: sample muted, synthesis remains active"
+                             : "SAMPLE + SYNTH: normal output restored", juce::dontSendNotification);
+    };
+
     for (auto* b : { &loadButton, &playButton, &removeButton })
     {
         addAndMakeVisible(*b);
@@ -160,4 +171,5 @@ void BlackDrumAudioProcessorEditor::resized()
     loadButton.setBounds(65, 325, 150, 38);
     playButton.setBounds(235, 325, 150, 38);
     removeButton.setBounds(405, 325, 150, 38);
+    synthOnlyButton.setBounds(405, 80, 150, 30);
 }
