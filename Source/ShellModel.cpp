@@ -206,5 +206,5 @@ float SnareShellModel::processSample(float membraneSample)
         + body * shellAmount
         + contact * (0.045f + 0.08f * shell01);
 
-    return juce::tanh(coupled * 0.95f) * 0.82f;
+    return std::tanh(coupled * 0.95f) * 0.82f;
 }
