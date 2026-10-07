@@ -219,7 +219,7 @@ void PhysicalSnareAudioProcessor::processBlock(
         const float combinedSample =
             shellSample
             + wireSample
-              * (0.50f + 0.55f * wire);
+              * (0.16f + 0.26f * wire);
 
         const float sample =
             juce::jlimit(
