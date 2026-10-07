@@ -239,7 +239,8 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
     physicalExciter[ch] += (0.075f + 0.055f * v) * (edge - physicalExciter[ch]);
     const float exciter = juce::jlimit(-1.0f, 1.0f, physicalExciter[ch] + 0.035f * input);
 
-    const float hitPosition = juce::jlimit(0.0f, 1.0f, hitPositionMorph.load());
+    const float hitPosition = juce::jlimit(0.0f, 1.0f,
+        hitPositionMorph.load() + hitMicroAttackPosition);
     // Position changes modal excitation, not the source sample itself.
     // Center emphasizes the fundamental/body; edge progressively excites upper modes.
     const float centerWeight = 1.0f - hitPosition;
@@ -248,14 +249,15 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
         + 105.0f * std::sqrt(v)
         + 34.0f * edgeWeight;
     const float membraneRadius = juce::jlimit(0.93f, 0.979f,
-        0.965f + 0.014f * v - 0.010f * edgeWeight);
+        (0.965f + 0.014f * v - 0.010f * edgeWeight)
+        * hitMicroTension);
     const float mw = 2.0f * juce::MathConstants<float>::pi * membraneFreq
                    / (float)juce::jmax(1.0, outputRate);
     const float mb = 1.0f - membraneRadius;
     const float ma1 = -2.0f * membraneRadius * std::cos(mw);
     const float ma2 = membraneRadius * membraneRadius;
     const float nonlinearExciter = std::tanh(exciter * (1.0f + 2.2f * v));
-    const float membraneGain = 0.90f + 0.10f * centerWeight;
+    const float membraneGain = (0.90f + 0.10f * centerWeight) * hitMicroTension;
     const float membrane = membraneGain * mb * nonlinearExciter
                          - ma1 * physicalMembraneY1[ch]
                          - ma2 * physicalMembraneY2[ch];
@@ -270,7 +272,9 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
     for (int mode = 0; mode < 3; ++mode)
     {
         const float frequency = shellFreq[mode] * (1.0f + 0.045f * v);
-        const float radius = 0.962f - 0.006f * (float)mode + 0.008f * v;
+        const float radius = juce::jlimit(0.90f, 0.985f,
+            (0.962f - 0.006f * (float)mode + 0.008f * v)
+            * hitMicroDecay);
         const float w = 2.0f * juce::MathConstants<float>::pi * frequency
                       / (float)juce::jmax(1.0, outputRate);
         const float b0 = 1.0f - radius;
@@ -280,7 +284,8 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
                       - a2 * physicalShellY2[mode][ch];
         physicalShellY2[mode][ch] = physicalShellY1[mode][ch];
         physicalShellY1[mode][ch] = y;
-        shell += y * shellGain[mode] * (mode == 0 ? modalBodyGain : modalUpperGain);
+        shell += y * shellGain[mode] * (mode == 0 ? modalBodyGain : modalUpperGain)
+            * hitMicroShellResonance;
     }
 
     const float brightness = 0.72f + 0.58f * v + 0.16f * edgeWeight;
@@ -357,6 +362,17 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 hitAttackVariation = 1.0f + nextRandom() * (0.035f + 0.035f * v);
                 hitResonanceVariation = 1.0f + nextRandom() * (0.04f + 0.06f * v);
                 hitNoiseVariation = 1.0f + nextRandom() * (0.10f + 0.12f * v);
+
+                // Stochastic Micro-Variation: tiny per-hit changes to physical
+                // parameters. Loudness is deliberately excluded; the variation
+                // lives in the simulated mechanics instead.
+                hitMicroTension = 1.0f + nextRandom() * (0.005f + 0.010f * v);
+                hitMicroWireSensitivity = 1.0f + nextRandom() * (0.020f + 0.030f * v);
+                hitMicroShellResonance = 1.0f + nextRandom() * (0.010f + 0.010f * v);
+                hitMicroAttackPosition = nextRandom() * (0.020f + 0.020f * v);
+                hitMicroPhase = nextRandom() * juce::MathConstants<float>::pi;
+                hitMicroDecay = 1.0f + nextRandom() * (0.010f + 0.020f * v);
+
                 // Hit Position Morph is now a manual control. MIDI velocity still
                 // changes the hit's dynamics, while this knob chooses the modal strike point.
                 const float response = dynamicResponse.load();
@@ -602,7 +618,9 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                             // Deterministic per-wire manufacturing/tension variation.
                             const float variation = 0.78f
                                 + 0.44f * (float)((wireIndex * 37 + 11) % 101) / 100.0f;
-                            const float sensitivity = variation * (0.82f + 0.36f * vce.velocity);
+                            const float sensitivity = variation
+                                * (0.82f + 0.36f * vce.velocity)
+                                * hitMicroWireSensitivity;
                             const float threshold = (0.00045f
                                 + 0.00175f * (1.0f - vce.velocity))
                                 * (1.28f - 0.34f * sensitivity);
@@ -617,6 +635,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
 
                             // Each wire sees a slightly different local membrane motion.
                             const float phaseOffset = vce.phaseMod0
+                                + hitMicroPhase
                                 + (float)wireIndex * 0.371f
                                 + (float)vce.position * (0.00007f + 0.000015f * p);
                             const float localMembrane = membraneProxy
