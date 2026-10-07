@@ -6,6 +6,7 @@ class SnareWireModel
 {
 public:
     static constexpr int NumWires = 10;
+    static constexpr int NumStringModes = 4;
 
     void prepare(double sampleRate);
     void reset();
@@ -16,18 +17,30 @@ public:
 
     void trigger(float impactEnergy, float velocity01);
 
-    float processSample(float bottomDisplacement);
+    float processSample(float bottomDisplacement,
+                        float bottomVelocity);
 
 private:
+    struct Mode
+    {
+        float displacement = 0.0f;
+        float velocity = 0.0f;
+        float omega = 0.0f;
+        float damping = 0.0f;
+        float weight = 0.0f;
+    };
+
     struct Wire
     {
-        float y1 = 0.0f;
-        float y2 = 0.0f;
-        float cosine = 1.0f;
-        float radius = 0.98f;
+        std::array<Mode, NumStringModes> modes {};
+        float gap = 0.0f;
+        float spring = 0.0f;
+        float contactDamping = 0.0f;
+        float roughness = 0.0f;
         float contactState = 0.0f;
-        float previousContact = 0.0f;
-        float gain = 0.0f;
+        float previousRelativeVelocity = 0.0f;
+        float previousForce = 0.0f;
+        float outputGain = 0.0f;
     };
 
     float randomBipolar() noexcept;
@@ -44,15 +57,16 @@ private:
     float triggerEnergy = 0.0f;
     float triggerDecayPerSample = 0.97f;
 
+    float previousHeadVelocity = 0.0f;
     unsigned int randomState = 0xA341316Cu;
 
-    static constexpr std::array<float, NumWires> wireRatios {{
-        0.74f, 0.81f, 0.89f, 0.96f, 1.00f,
-        1.06f, 1.13f, 1.21f, 1.29f, 1.38f
+    static constexpr std::array<float, NumWires> tensionScale {{
+        0.92f, 1.01f, 0.97f, 1.04f, 0.95f,
+        1.02f, 0.99f, 1.06f, 0.94f, 1.03f
     }};
 
-    static constexpr std::array<float, NumWires> wireIrregularity {{
-        0.96f, 1.025f, 0.985f, 1.045f, 0.972f,
-        1.018f, 1.038f, 0.978f, 1.030f, 0.992f
+    static constexpr std::array<float, NumWires> gapScale {{
+        0.92f, 1.04f, 0.97f, 1.08f, 0.95f,
+        1.02f, 1.06f, 0.93f, 1.01f, 1.07f
     }};
 };
