@@ -26,6 +26,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     roomDampingState[0] = roomDampingState[1] = 0.0f;
     roomInputState[0] = roomInputState[1] = 0.0f;
     physicalExciter[0] = physicalExciter[1] = 0.0f;
+    physicalSynthMixSmoothed = physicalSynthMix.load();
     physicalPrev[0] = physicalPrev[1] = 0.0f;
     physicalMembraneY1[0] = physicalMembraneY1[1] = physicalMembraneY2[0] = physicalMembraneY2[1] = 0.0f;
     for (auto& mode : physicalShellY1) for (auto& value : mode) value = 0.0f;
@@ -229,7 +230,12 @@ float BlackDrumAudioProcessor::processRoomReverb(float input, int channel, float
 
 float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, float velocity)
 {
-    const float mix = physicalSynthMix.load();
+    // Never switch the physical layer on/off at a single sample: that creates
+    // a tiny discontinuity which is heard as a click, especially at high Dynamic Response.
+    const float targetMix = physicalSynthMix.load();
+    const mixCoeff = 1.0f - std::exp(-1.0f / (0.005f * (float)juce::jmax(1.0, outputRate)));
+    physicalSynthMixSmoothed += mixCoeff * (targetMix - physicalSynthMixSmoothed);
+    const float mix = physicalSynthMixSmoothed;
     if (mix <= 0.0001f) return 0.0f;
     const int ch = juce::jlimit(0, 1, channel);
     const float v = juce::jlimit(0.0f, 1.0f, velocity);
