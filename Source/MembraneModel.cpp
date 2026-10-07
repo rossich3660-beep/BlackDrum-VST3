@@ -28,6 +28,10 @@ void SnareMembraneModel::reset()
             voice.active = false;
             voice.age = 0;
             voice.nonlinearAmount = 0.0f;
+            voice.attackLevel = 0.0f;
+            voice.attackDecayPerSample = 1.0f;
+            voice.attackFilter = 0.0f;
+            voice.attackPreviousNoise = 0.0f;
 
             for (auto& mode : voice.modes)
                 mode = {};
@@ -101,8 +105,20 @@ void SnareMembraneModel::configureVoice(
 
         const float relativeFrequency = spec.zero / fundamentalZero;
         const float frequency = tuningHz * relativeFrequency;
+        const float modeIndex = static_cast<float>(i);
+
+        // Real membrane damping is frequency dependent: upper partials
+        // disappear faster than the fundamental, especially as DAMP rises.
+        const float spectralDamping =
+            0.105f
+            + 0.24f * damping01
+            + 0.012f * damping01 * modeIndex;
+
         const float modeDecay =
-            baseDecaySeconds / (1.0f + 0.105f * static_cast<float>(i));
+            baseDecaySeconds
+            / (1.0f
+               + spectralDamping * modeIndex
+               + 0.008f * damping01 * modeIndex * modeIndex);
 
         const float safeDecay = juce::jmax(0.05f, modeDecay);
 
@@ -166,12 +182,16 @@ void SnareMembraneModel::trigger(float velocity01)
             1.0f / (1.0f + 0.075f * static_cast<float>(i));
 
         // Harder hits excite more high-order membrane modes.
+        const float highModePosition =
+            static_cast<float>(i + 1)
+            / static_cast<float>(NumModes);
+
         const float velocityBrightness =
-            1.0f + 0.11f * velocity
-                  * std::pow(
-                      static_cast<float>(i + 1)
-                      / static_cast<float>(NumModes),
-                      1.25f);
+            1.0f
+            + 0.13f
+              * velocity
+              * std::pow(highModePosition, 1.22f)
+              * (1.0f - 0.62f * damping01);
 
         const float hitToHitJitter =
             1.0f + 0.012f * randomBipolar();
@@ -191,6 +211,34 @@ void SnareMembraneModel::trigger(float velocity01)
             (0.055f + 1.15f * std::pow(velocity, 1.28f))
             * energyJitter
             * (1.0f - 0.014f * repetitionMemory));
+
+    // Contact is shortest on a hard hit and slightly softer on a light hit.
+    // It is deliberately separate from the resonant membrane tail.
+    const float attackTauSeconds =
+        juce::jmap(
+            velocity,
+            0.0030f,
+            0.00085f)
+        * juce::jmap(
+            damping01,
+            1.0f,
+            0.72f);
+
+    voice.attackLevel =
+        juce::jlimit(
+            0.012f,
+            0.34f,
+            (0.045f + 0.24f * velocity)
+            * (0.92f + 0.08f * energyJitter));
+
+    voice.attackDecayPerSample =
+        std::exp(
+            -1.0f
+            / (juce::jmax(0.0005f, attackTauSeconds)
+               * static_cast<float>(sampleRate)));
+
+    voice.attackFilter = 0.0f;
+    voice.attackPreviousNoise = randomBipolar();
 
     const float baseDecaySeconds =
         juce::jmap(damping01, 0.0f, 1.0f, 1.85f, 0.42f)
@@ -375,9 +423,35 @@ float SnareMembraneModel::processHead(Head& head)
         float voiceOutput = 0.0f;
         bool audible = false;
 
+        // Short stick/material contact. The filtered stochastic component
+        // gives the attack texture of a real hit without becoming hiss.
+        if (voice.attackLevel > 1.0e-5f)
+        {
+            const float noise = randomBipolar();
+
+            voice.attackFilter =
+                0.78f * voice.attackFilter
+                + 0.22f * noise;
+
+            const float highPassed =
+                noise
+                - voice.attackPreviousNoise * 0.92f;
+
+            voice.attackPreviousNoise = noise;
+
+            const float contact =
+                0.58f * voice.attackFilter
+                + 0.42f * highPassed;
+
+            voiceOutput += voice.attackLevel * contact;
+
+            voice.attackLevel *= voice.attackDecayPerSample;
+        }
+
         for (auto& mode : voice.modes)
         {
-            if (std::abs(mode.amplitude) > 1.0e-7f)
+            if (std::abs(mode.amplitude) > 1.0e-7f
+            || voice.attackLevel > 1.0e-5f)
             {
                 audible = true;
 
@@ -428,6 +502,7 @@ float SnareMembraneModel::processHead(Head& head)
         {
             voice.active = false;
             voice.nonlinearAmount = 0.0f;
+            voice.attackLevel = 0.0f;
             continue;
         }
 
