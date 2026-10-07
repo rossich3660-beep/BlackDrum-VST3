@@ -84,8 +84,8 @@ void SnareWireModel::updateWires()
             + 0.0005f * std::abs(wireScale - 1.0f);
 
         wire.outputGain =
-            (0.035f + 0.042f * contact01)
-            / (1.0f + 0.08f * static_cast<float>(i));
+            (0.012f + 0.018f * contact01)
+            / (1.0f + 0.11f * static_cast<float>(i));
 
         const float modeSpread =
             1.0f + 0.012f * static_cast<float>(i);
@@ -359,11 +359,13 @@ float SnareWireModel::processSample(
 
     // The microphone hears mainly velocity/recontact energy, not the static
     // displacement of the wire. A gentle saturation keeps bursts natural.
+    // Wires should read as contact texture riding on the snare, not as
+    // an independent pitched instrument.
     const float raw =
-        0.72f * outputVelocity
-        + 0.28f * outputContact;
+        0.34f * outputVelocity
+        + 0.66f * outputContact;
 
-    return std::tanh(raw * 1.7f) * 0.56f;
+    return std::tanh(raw * 2.0f) * 0.28f;
 }
 
 float SnareWireModel::randomBipolar() noexcept
