@@ -4,64 +4,55 @@ PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
     PhysicalSnareAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(900, 520);
+    setSize(820, 450);
     setResizable(false, false);
 
     title.setText("PHYSICAL SNARE", juce::dontSendNotification);
-    title.setFont(juce::Font(juce::FontOptions(30.0f, juce::Font::bold)));
+    title.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(title);
 
-    stageLabel.setText("STAGE 2  -  BATTER MEMBRANE", juce::dontSendNotification);
-    stageLabel.setFont(juce::Font(juce::FontOptions(15.0f)));
+    stageLabel.setText("STAGE 3", juce::dontSendNotification);
+    stageLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
     stageLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff9d32));
     addAndMakeVisible(stageLabel);
 
-    midiLabel.setJustificationType(juce::Justification::centred);
-    midiLabel.setFont(juce::Font(juce::FontOptions(20.0f, juce::Font::bold)));
-    midiLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible(midiLabel);
+    statusLabel.setJustificationType(juce::Justification::centred);
+    statusLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
+    statusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffbdbdbd));
+    addAndMakeVisible(statusLabel);
 
-    velocityLabel.setJustificationType(juce::Justification::centred);
-    velocityLabel.setFont(juce::Font(juce::FontOptions(16.0f)));
-    velocityLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible(velocityLabel);
+    styleSlider(tuneSlider);
+    styleSlider(dampingSlider);
+    styleSlider(hitPositionSlider);
+    styleSlider(levelSlider);
+    styleSlider(bottomTuneSlider);
+    styleSlider(airSlider);
 
-    eventsLabel.setJustificationType(juce::Justification::centred);
-    eventsLabel.setFont(juce::Font(juce::FontOptions(14.0f)));
-    eventsLabel.setColour(juce::Label::textColourId, juce::Colour(0xffbdbdbd));
-    addAndMakeVisible(eventsLabel);
-
-    infoLabel.setText(
-        "Linear modal membrane: 12 modes, velocity excitation, spatial hit position",
-        juce::dontSendNotification);
-    infoLabel.setJustificationType(juce::Justification::centred);
-    infoLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
-    infoLabel.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
-    addAndMakeVisible(infoLabel);
-
-    styleSlider(tuneSlider, " Hz");
     tuneSlider.setRange(90.0, 360.0, 0.1);
     tuneSlider.setDoubleClickReturnValue(true, 185.0);
-    addAndMakeVisible(tuneSlider);
 
-    styleSlider(dampingSlider, "");
     dampingSlider.setRange(0.0, 1.0, 0.001);
-    dampingSlider.setNumDecimalPlacesToDisplay(2);
     dampingSlider.setDoubleClickReturnValue(true, 0.40);
-    addAndMakeVisible(dampingSlider);
 
-    styleSlider(hitPositionSlider, "");
     hitPositionSlider.setRange(0.0, 1.0, 0.001);
-    hitPositionSlider.setNumDecimalPlacesToDisplay(2);
     hitPositionSlider.setDoubleClickReturnValue(true, 0.35);
-    addAndMakeVisible(hitPositionSlider);
 
-    styleSlider(levelSlider, "");
     levelSlider.setRange(0.0, 1.0, 0.001);
-    levelSlider.setNumDecimalPlacesToDisplay(2);
     levelSlider.setDoubleClickReturnValue(true, 0.75);
-    addAndMakeVisible(levelSlider);
+
+    bottomTuneSlider.setRange(90.0, 360.0, 0.1);
+    bottomTuneSlider.setDoubleClickReturnValue(true, 170.0);
+
+    airSlider.setRange(0.0, 1.0, 0.001);
+    airSlider.setDoubleClickReturnValue(true, 0.35);
+
+    for (auto* slider : {
+        &tuneSlider, &dampingSlider, &hitPositionSlider,
+        &levelSlider, &bottomTuneSlider, &airSlider })
+    {
+        addAndMakeVisible(*slider);
+    }
 
     auto& state = processor.getParameters();
 
@@ -73,27 +64,30 @@ PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
         state, "HITPOS", hitPositionSlider);
     levelAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         state, "LEVEL", levelSlider);
+    bottomTuneAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        state, "BOTTOM", bottomTuneSlider);
+    airAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        state, "AIR", airSlider);
 
     startTimerHz(30);
     timerCallback();
 }
 
-void PhysicalSnareAudioProcessorEditor::styleSlider(juce::Slider& slider, const juce::String& suffix)
+void PhysicalSnareAudioProcessorEditor::styleSlider(juce::Slider& slider)
 {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(
         juce::Slider::TextBoxBelow,
         false,
-        90,
-        22);
+        58,
+        18);
+
+    slider.setNumDecimalPlacesToDisplay(2);
     slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xffff9d32));
     slider.setColour(juce::Slider::thumbColourId, juce::Colour(0xffffc067));
     slider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
-    slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff202020));
-    slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff505050));
-
-    if (suffix.isNotEmpty())
-        slider.setTextValueSuffix(suffix);
+    slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff1b1b1b));
+    slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff444444));
 }
 
 void PhysicalSnareAudioProcessorEditor::timerCallback()
@@ -101,88 +95,107 @@ void PhysicalSnareAudioProcessorEditor::timerCallback()
     const int note = processor.getLastMidiNote();
     const int velocity = processor.getLastMidiVelocity();
 
-    if (note >= 0)
-    {
-        midiLabel.setText(
-            "MIDI NOTE  " + juce::MidiMessage::getMidiNoteName(note, true, true, 4),
-            juce::dontSendNotification);
-    }
-    else
-    {
-        midiLabel.setText("MIDI NOTE  -", juce::dontSendNotification);
-    }
+    const juce::String noteText =
+        note >= 0
+            ? juce::MidiMessage::getMidiNoteName(note, true, true, 4)
+            : "-";
 
-    velocityLabel.setText(
-        "VELOCITY  " + juce::String(velocity),
+    statusLabel.setText(
+        noteText + "  V" + juce::String(velocity),
         juce::dontSendNotification);
 
-    eventsLabel.setText(
-        "RECEIVED EVENTS  " + juce::String(processor.getMidiEventCount()),
-        juce::dontSendNotification);
+    repaint();
 }
 
 void PhysicalSnareAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff101010));
 
-    const auto panel = getLocalBounds().reduced(18).toFloat();
+    const auto panel = getLocalBounds().reduced(14).toFloat();
 
     g.setColour(juce::Colour(0xff171717));
-    g.fillRoundedRectangle(panel, 16.0f);
+    g.fillRoundedRectangle(panel, 14.0f);
 
     g.setColour(juce::Colour(0xff3a3a3a));
-    g.drawRoundedRectangle(panel, 16.0f, 1.0f);
+    g.drawRoundedRectangle(panel, 14.0f, 1.0f);
 
-    const auto head = juce::Rectangle<float>(250.0f, 95.0f, 370.0f, 260.0f);
+    const float cx = 410.0f;
+    const float topY = 115.0f;
+    const float bottomY = 255.0f;
 
-    g.setColour(juce::Colour(0xff0f0f0f));
-    g.fillRoundedRectangle(head, 18.0f);
+    g.setColour(juce::Colour(0xff212121));
+    g.fillEllipse(cx - 155.0f, topY - 32.0f, 310.0f, 64.0f);
+    g.fillEllipse(cx - 155.0f, bottomY - 32.0f, 310.0f, 64.0f);
 
-    g.setColour(juce::Colour(0xff5d5d5d));
-    g.drawRoundedRectangle(head, 18.0f, 1.5f);
+    g.setColour(juce::Colour(0xff6c6c6c));
+    g.drawEllipse(cx - 155.0f, topY - 32.0f, 310.0f, 64.0f, 1.4f);
+    g.drawEllipse(cx - 155.0f, bottomY - 32.0f, 310.0f, 64.0f, 1.4f);
 
-    const auto centreX = head.getCentreX();
-    const auto centreY = head.getCentreY();
+    g.setColour(juce::Colour(0xff343434));
+    g.drawLine(cx - 120.0f, topY + 20.0f, cx + 120.0f, topY + 20.0f, 1.0f);
+    g.drawLine(cx - 120.0f, bottomY - 20.0f, cx + 120.0f, bottomY - 20.0f, 1.0f);
 
-    for (int i = 0; i < 5; ++i)
-    {
-        const float inset = 18.0f + (float) i * 22.0f;
-        g.setColour(i == 0 ? juce::Colour(0xff7a7a7a) : juce::Colour(0xff353535));
-        g.drawEllipse(
-            centreX - 92.0f + inset,
-            centreY - 62.0f + inset * 0.42f,
-            184.0f - inset * 0.8f,
-            124.0f - inset * 0.38f,
-            i == 0 ? 1.5f : 1.0f);
-    }
+    g.setColour(juce::Colour(0xff2b2b2b));
+    g.fillRoundedRectangle(
+        cx - 120.0f,
+        topY + 31.0f,
+        240.0f,
+        bottomY - topY - 62.0f,
+        8.0f);
 
-    const float x = centreX - 92.0f + 184.0f * hitPositionSlider.getValue();
-    const float y = centreY;
+    const float hitX =
+        cx - 118.0f + 236.0f * static_cast<float>(
+            processor.getParameters().getRawParameterValue("HITPOS")->load());
 
     g.setColour(juce::Colour(0xffff9d32));
-    g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
+    g.fillEllipse(hitX - 6.0f, topY - 6.0f, 12.0f, 12.0f);
 
-    g.setColour(juce::Colour(0xffff9d32).withAlpha(0.35f));
-    g.drawEllipse(x - 15.0f, y - 15.0f, 30.0f, 30.0f, 1.0f);
+    const int sliderY = 332;
+    const int sliderW = 102;
+    const int gap = 24;
+    const int startX = 70;
 
-    g.setColour(juce::Colour(0xff777777));
-    g.drawLine(250.0f, 375.0f, 620.0f, 375.0f, 1.0f);
+    const char* labels[] = { "TUNE", "DAMP", "HIT", "LEVEL", "BOT", "AIR" };
+    juce::Slider* sliders[] = {
+        &tuneSlider, &dampingSlider, &hitPositionSlider,
+        &levelSlider, &bottomTuneSlider, &airSlider
+    };
+
+    for (int i = 0; i < 6; ++i)
+    {
+        const int x = startX + i * (sliderW + gap);
+
+        g.setColour(juce::Colour(0xffc0c0c0));
+        g.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
+        g.drawFittedText(
+            labels[i],
+            x,
+            sliderY - 16,
+            sliderW,
+            14,
+            juce::Justification::centred,
+            1);
+
+        ignoreUnused(sliders);
+    }
 }
 
 void PhysicalSnareAudioProcessorEditor::resized()
 {
-    title.setBounds(42, 28, 340, 40);
-    stageLabel.setBounds(42, 70, 330, 24);
+    title.setBounds(28, 22, 230, 30);
+    stageLabel.setBounds(270, 24, 80, 24);
+    statusLabel.setBounds(630, 22, 150, 26);
 
-    infoLabel.setBounds(200, 50, 500, 24);
+    const int y = 342;
+    const int w = 92;
+    const int h = 80;
+    const int gap = 18;
+    const int startX = 74;
 
-    const int y = 375;
-    tuneSlider.setBounds(90, y, 160, 115);
-    dampingSlider.setBounds(265, y, 160, 115);
-    hitPositionSlider.setBounds(440, y, 160, 115);
-    levelSlider.setBounds(615, y, 160, 115);
-
-    midiLabel.setBounds(100, 325, 700, 28);
-    velocityLabel.setBounds(100, 350, 700, 26);
-    eventsLabel.setBounds(100, 405, 700, 24);
+    tuneSlider.setBounds(startX + 0 * (w + gap), y, w, h);
+    dampingSlider.setBounds(startX + 1 * (w + gap), y, w, h);
+    hitPositionSlider.setBounds(startX + 2 * (w + gap), y, w, h);
+    levelSlider.setBounds(startX + 3 * (w + gap), y, w, h);
+    bottomTuneSlider.setBounds(startX + 4 * (w + gap), y, w, h);
+    airSlider.setBounds(startX + 5 * (w + gap), y, w, h);
 }
