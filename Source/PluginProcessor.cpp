@@ -504,7 +504,19 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 const float voiceFrac = (float)(pos - voiceIdx);
                 const float a = sample.getSample(sc, voiceIdx);
                 const float b = sample.getSample(sc, voiceNext);
-                raw += a + (b - a) * voiceFrac;
+
+                // At high Dynamic Response the velocity shaping can expose a tiny
+                // discontinuity at the first sample of the source transient. Apply
+                // only a sub-millisecond start ramp at high settings; at lower
+                // settings the original sample path remains unchanged.
+                const float response = dynamicResponse.load();
+                const float rampAmount = juce::jlimit(0.0f, 1.0f,
+                    (response - 0.55f) / 0.45f);
+                const float rampSamples = 1.0f + 17.0f * rampAmount;
+                const float startEnvelope = juce::jlimit(0.0f, 1.0f,
+                    (float)(pos + 1.0) / rampSamples);
+
+                raw += (a + (b - a) * voiceFrac) * startEnvelope;
                 ++activeCount;
             }
             if (activeCount > 1) raw *= 1.0f / std::sqrt((float)activeCount);
