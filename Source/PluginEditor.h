@@ -30,6 +30,8 @@ private:
     juce::Slider airSlider;
     juce::Slider shellSlider;
     juce::Slider depthSlider;
+    juce::Slider snareSlider;
+    juce::Slider wireSlider;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> tuneAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> dampingAttachment;
@@ -39,6 +41,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> airAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> shellAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> depthAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> snareAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> wireAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhysicalSnareAudioProcessorEditor)
 };
