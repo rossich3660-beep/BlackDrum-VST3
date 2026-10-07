@@ -1,175 +1,127 @@
 #include "PluginEditor.h"
 
-BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProcessor& p)
+PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
+    PhysicalSnareAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(620, 390);
-    title.setText("BLACKDRUM", juce::dontSendNotification);
-    title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
+    setSize(760, 430);
+    setResizable(false, false);
+
+    title.setText("PHYSICAL SNARE", juce::dontSendNotification);
+    title.setFont(juce::Font(juce::FontOptions(30.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(title);
 
-    filename.setText("No sample loaded", juce::dontSendNotification);
-    filename.setJustificationType(juce::Justification::centred);
-    filename.setColour(juce::Label::textColourId, juce::Colour(0xffeeeeee));
-    addAndMakeVisible(filename);
+    stageLabel.setText("STAGE 1  •  MIDI ENGINE", juce::dontSendNotification);
+    stageLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::plain)));
+    stageLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff9d32));
+    addAndMakeVisible(stageLabel);
 
-    hint.setText("Drop an audio file here  •  WAV / AIFF / FLAC / OGG", juce::dontSendNotification);
-    hint.setJustificationType(juce::Justification::centred);
-    hint.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
-    addAndMakeVisible(hint);
+    midiLabel.setJustificationType(juce::Justification::centred);
+    midiLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
+    midiLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible(midiLabel);
 
-    addAndMakeVisible(synthOnlyButton);
-    synthOnlyButton.setClickingTogglesState(true);
-    synthOnlyButton.setToggleState(processor.isSynthOnly(), juce::dontSendNotification);
-    synthOnlyButton.onClick = [this]
-    {
-        const bool enabled = synthOnlyButton.getToggleState();
-        processor.setSynthOnly(enabled);
-        hint.setText(enabled ? "SYNTH ONLY: sample muted, synthesis remains active"
-                             : "SAMPLE + SYNTH: normal output restored", juce::dontSendNotification);
-    };
+    velocityLabel.setJustificationType(juce::Justification::centred);
+    velocityLabel.setFont(juce::Font(juce::FontOptions(18.0f, juce::Font::plain)));
+    velocityLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible(velocityLabel);
 
-    for (auto* b : { &loadButton, &playButton, &removeButton })
-    {
-        addAndMakeVisible(*b);
-        b->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292929));
-        b->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    }
+    eventsLabel.setJustificationType(juce::Justification::centred);
+    eventsLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::plain)));
+    eventsLabel.setColour(juce::Label::textColourId, juce::Colour(0xffbdbdbd));
+    addAndMakeVisible(eventsLabel);
 
-    loadButton.onClick = [this]
-    {
-        if (fileChooser != nullptr)
-            return;
+    infoLabel.setText(
+        "No audio synthesis yet. Stage 2 will add the first physical membrane model.",
+        juce::dontSendNotification);
+    infoLabel.setJustificationType(juce::Justification::centred);
+    infoLabel.setFont(juce::Font(juce::FontOptions(14.0f)));
+    infoLabel.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
+    addAndMakeVisible(infoLabel);
 
-        fileChooser = std::make_unique<juce::FileChooser>(
-            "Choose an audio sample", juce::File{},
-            "*.wav;*.aiff;*.aif;*.flac;*.ogg");
-
-        juce::Component::SafePointer<BlackDrumAudioProcessorEditor> safeThis(this);
-        fileChooser->launchAsync(
-            juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-            [safeThis]
-            (const juce::FileChooser& chooser)
-            {
-                if (safeThis == nullptr)
-                    return;
-
-                const auto selected = chooser.getResult();
-                safeThis->fileChooser.reset();
-
-                if (selected.existsAsFile())
-                    safeThis->loadFrom(selected);
-            });
-    };
-
-    playButton.onClick = [this]
-    {
-        // Preview playback is not implemented yet; MIDI notes from the host trigger the sample.
-        hint.setText("Use a MIDI note to preview the loaded sample", juce::dontSendNotification);
-    };
-
-    removeButton.onClick = [this]
-    {
-        hint.setText("Sample remains loaded until another sample is selected", juce::dontSendNotification);
-        filename.setText("No sample loaded", juce::dontSendNotification);
-    };
+    startTimerHz(30);
+    timerCallback();
 }
 
-bool BlackDrumAudioProcessorEditor::isSupportedAudioFile(const juce::File& file) const
+void PhysicalSnareAudioProcessorEditor::timerCallback()
 {
-    const auto ext = file.getFileExtension().toLowerCase();
-    return ext == ".wav" || ext == ".aif" || ext == ".aiff"
-        || ext == ".flac" || ext == ".ogg";
-}
+    const int note = processor.getLastMidiNote();
+    const int velocity = processor.getLastMidiVelocity();
 
-void BlackDrumAudioProcessorEditor::loadFrom(const juce::File& file)
-{
-    if (!isSupportedAudioFile(file))
+    if (note >= 0)
     {
-        hint.setText("Unsupported file. Choose WAV, AIFF, FLAC or OGG.", juce::dontSendNotification);
-        return;
-    }
-
-    if (processor.loadSample(file))
-    {
-        filename.setText(file.getFileName() + "  •  "
-            + juce::String(static_cast<juce::int64>(file.getSize() / 1024)) + " KB",
+        midiLabel.setText(
+            "MIDI NOTE  " + juce::MidiMessage::getMidiNoteName(note, true, true, 4),
             juce::dontSendNotification);
-        hint.setText("Sample loaded successfully", juce::dontSendNotification);
     }
     else
     {
-        hint.setText("Could not load this audio file", juce::dontSendNotification);
+        midiLabel.setText("MIDI NOTE  —", juce::dontSendNotification);
     }
+
+    velocityLabel.setText(
+        "VELOCITY  " + juce::String(velocity),
+        juce::dontSendNotification);
+
+    eventsLabel.setText(
+        "RECEIVED EVENTS  " + juce::String(processor.getMidiEventCount()),
+        juce::dontSendNotification);
 }
 
-bool BlackDrumAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
+void PhysicalSnareAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    for (const auto& path : files)
-        if (isSupportedAudioFile(juce::File(path)))
-            return true;
-    return false;
+    g.fillAll(juce::Colour(0xff101010));
+
+    auto panel = getLocalBounds().reduced(18).toFloat();
+    g.setColour(juce::Colour(0xff181818));
+    g.fillRoundedRectangle(panel, 16.0f);
+
+    g.setColour(juce::Colour(0xff3a3a3a));
+    g.drawRoundedRectangle(panel, 16.0f, 1.0f);
+
+    auto centre = juce::Rectangle<float>(
+        55.0f, 125.0f,
+        static_cast<float>(getWidth() - 110),
+        205.0f);
+
+    g.setColour(juce::Colour(0xff131313));
+    g.fillRoundedRectangle(centre, 14.0f);
+
+    g.setColour(juce::Colour(0xff484848));
+    g.drawRoundedRectangle(centre, 14.0f, 1.0f);
+
+    g.setColour(juce::Colour(0xff262626));
+    g.fillEllipse(
+        getWidth() * 0.5f - 78.0f,
+        160.0f,
+        156.0f,
+        156.0f);
+
+    g.setColour(juce::Colour(0xff8a8a8a));
+    g.drawEllipse(
+        getWidth() * 0.5f - 78.0f,
+        160.0f,
+        156.0f,
+        156.0f,
+        2.0f);
+
+    g.setColour(juce::Colour(0xffff9d32));
+    g.fillEllipse(
+        getWidth() * 0.5f - 8.0f,
+        230.0f,
+        16.0f,
+        16.0f);
 }
 
-void BlackDrumAudioProcessorEditor::fileDragEnter(const juce::StringArray&, int, int)
+void PhysicalSnareAudioProcessorEditor::resized()
 {
-    dragHover = true;
-    repaint();
-}
+    title.setBounds(42, 30, 310, 42);
+    stageLabel.setBounds(42, 73, 280, 26);
 
-void BlackDrumAudioProcessorEditor::fileDragExit(const juce::StringArray&)
-{
-    dragHover = false;
-    repaint();
-}
+    midiLabel.setBounds(80, 342, 600, 32);
+    velocityLabel.setBounds(80, 374, 600, 28);
+    eventsLabel.setBounds(80, 399, 600, 24);
 
-void BlackDrumAudioProcessorEditor::filesDropped(const juce::StringArray& files, int, int)
-{
-    dragHover = false;
-    repaint();
-    for (const auto& path : files)
-    {
-        const juce::File file(path);
-        if (isSupportedAudioFile(file))
-        {
-            loadFrom(file);
-            return;
-        }
-    }
-}
-
-void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
-{
-    g.fillAll(juce::Colour(0xff111111));
-    auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(0xff1b1b1b));
-    g.fillRoundedRectangle(bounds.reduced(14.0f), 14.0f);
-    g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff303030));
-    g.drawRoundedRectangle(bounds.reduced(14.0f), 14.0f, dragHover ? 2.5f : 1.0f);
-
-    auto area = juce::Rectangle<float>(35.0f, 112.0f, static_cast<float>(getWidth() - 70), 190.0f);
-    g.setColour(dragHover ? juce::Colour(0xff202a33) : juce::Colour(0xff151515));
-    g.fillRoundedRectangle(area, 12.0f);
-    g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff484848));
-    g.drawRoundedRectangle(area, 12.0f, 1.5f);
-
-    g.setColour(juce::Colour(0xffbdbdbd));
-    g.drawEllipse(getWidth() / 2.0f - 22.0f, 145.0f, 44.0f, 44.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f, 155.0f, getWidth() / 2.0f, 179.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f - 8.0f, 170.0f, getWidth() / 2.0f, 179.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f + 8.0f, 170.0f, getWidth() / 2.0f, 179.0f, 2.0f);
-}
-
-void BlackDrumAudioProcessorEditor::resized()
-{
-    auto r = getLocalBounds();
-    title.setBounds(35, 28, 300, 45);
-    dropArea = r.withTrimmedTop(110).withTrimmedBottom(90);
-    hint.setBounds(45, 215, getWidth() - 90, 30);
-    filename.setBounds(45, 260, getWidth() - 90, 25);
-    loadButton.setBounds(65, 325, 150, 38);
-    playButton.setBounds(235, 325, 150, 38);
-    removeButton.setBounds(405, 325, 150, 38);
-    synthOnlyButton.setBounds(405, 80, 150, 30);
+    infoLabel.setBounds(70, 118, 620, 28);
 }
