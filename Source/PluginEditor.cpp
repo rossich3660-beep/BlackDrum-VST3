@@ -12,7 +12,7 @@ PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
     title.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(title);
 
-    stageLabel.setText("STAGE 4", juce::dontSendNotification);
+    stageLabel.setText("STAGE 5", juce::dontSendNotification);
     stageLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
     stageLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff9d32));
     addAndMakeVisible(stageLabel);
@@ -30,6 +30,8 @@ PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
     styleSlider(airSlider);
     styleSlider(shellSlider);
     styleSlider(depthSlider);
+    styleSlider(snareSlider);
+    styleSlider(wireSlider);
 
     tuneSlider.setRange(90.0, 360.0, 0.1);
     tuneSlider.setDoubleClickReturnValue(true, 185.0);
@@ -55,10 +57,16 @@ PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
     depthSlider.setRange(0.0, 1.0, 0.001);
     depthSlider.setDoubleClickReturnValue(true, 0.45);
 
+    snareSlider.setRange(0.0, 1.0, 0.001);
+    snareSlider.setDoubleClickReturnValue(true, 0.65);
+
+    wireSlider.setRange(0.0, 1.0, 0.001);
+    wireSlider.setDoubleClickReturnValue(true, 0.75);
+
     for (auto* slider : {
         &tuneSlider, &dampingSlider, &hitPositionSlider,
         &levelSlider, &bottomTuneSlider, &airSlider,
-        &shellSlider, &depthSlider })
+        &shellSlider, &depthSlider, &snareSlider, &wireSlider })
     {
         addAndMakeVisible(*slider);
     }
@@ -81,6 +89,10 @@ PhysicalSnareAudioProcessorEditor::PhysicalSnareAudioProcessorEditor(
         state, "SHELL", shellSlider);
     depthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         state, "DEPTH", depthSlider);
+    snareAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        state, "SNARE", snareSlider);
+    wireAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        state, "WIRE", wireSlider);
 
     startTimerHz(30);
     timerCallback();
@@ -165,16 +177,17 @@ void PhysicalSnareAudioProcessorEditor::paint(juce::Graphics& g)
 
     const char* labels[] = {
         "TUNE", "DAMP", "HIT", "LEVEL",
-        "BOT", "AIR", "SHELL", "DEPTH"
+        "BOT", "AIR", "SHELL", "DEPTH",
+        "SNARE", "WIRE"
     };
 
     juce::Slider* sliders[] = {
         &tuneSlider, &dampingSlider, &hitPositionSlider,
         &levelSlider, &bottomTuneSlider, &airSlider,
-        &shellSlider, &depthSlider
+        &shellSlider, &depthSlider, &snareSlider, &wireSlider
     };
 
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < 10; ++i)
     {
         const auto bounds = sliders[i]->getBounds();
 
@@ -198,10 +211,10 @@ void PhysicalSnareAudioProcessorEditor::resized()
     statusLabel.setBounds(630, 22, 150, 26);
 
     const int y = 342;
-    const int w = 78;
+    const int w = 64;
     const int h = 80;
-    const int gap = 12;
-    const int startX = 56;
+    const int gap = 8;
+    const int startX = 52;
 
     tuneSlider.setBounds(startX + 0 * (w + gap), y, w, h);
     dampingSlider.setBounds(startX + 1 * (w + gap), y, w, h);
@@ -211,4 +224,6 @@ void PhysicalSnareAudioProcessorEditor::resized()
     airSlider.setBounds(startX + 5 * (w + gap), y, w, h);
     shellSlider.setBounds(startX + 6 * (w + gap), y, w, h);
     depthSlider.setBounds(startX + 7 * (w + gap), y, w, h);
+    snareSlider.setBounds(startX + 8 * (w + gap), y, w, h);
+    wireSlider.setBounds(startX + 9 * (w + gap), y, w, h);
 }
