@@ -97,6 +97,9 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
         const float transient = 1.0f + attackAmount * std::exp(-elapsed * 3.2f);
         // Harder strikes excite slightly more modeled body, kept deliberately subtle.
         const float resonanceMix = 0.025f + 0.075f * velocity;
+        // In synth-only mode the original sample is muted at the output, while
+        // the resonator/model remains active and is still excited by the sample.
+        const float dryMix = synthOnly ? 0.0f : 1.0f;
 
         for (int ch = 0; ch < out.getNumChannels(); ++ch)
         {
@@ -114,9 +117,11 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             resonatorY1[fc] = body;
 
             const float blended = raw * (1.0f - resonanceMix) + body * resonanceMix;
-            const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity))
-                                           * voiceGain * transient * 1.10f);
-            out.setSample(ch, i, shaped);
+            const float processedDry = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity))
+                                                  * voiceGain * transient * 1.10f);
+            // Keep only the synthesized/resonator component when requested.
+            const float synth = std::tanh(body * (1.35f + 0.55f * velocity) * transient);
+            out.setSample(ch, i, dryMix * processedDry + (1.0f - dryMix) * synth);
         }
         playbackPosition += playbackRate;
     }
