@@ -14,27 +14,27 @@ public:
 
 private:
     void timerCallback() override;
-
-    void styleSlider(juce::Slider&, const juce::String& suffix);
+    void styleSlider(juce::Slider&);
 
     PhysicalSnareAudioProcessor& processor;
 
     juce::Label title;
     juce::Label stageLabel;
-    juce::Label midiLabel;
-    juce::Label velocityLabel;
-    juce::Label eventsLabel;
-    juce::Label infoLabel;
+    juce::Label statusLabel;
 
     juce::Slider tuneSlider;
     juce::Slider dampingSlider;
     juce::Slider hitPositionSlider;
     juce::Slider levelSlider;
+    juce::Slider bottomTuneSlider;
+    juce::Slider airSlider;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> tuneAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> dampingAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> hitPositionAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> levelAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> bottomTuneAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> airAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhysicalSnareAudioProcessorEditor)
 };
