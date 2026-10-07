@@ -26,6 +26,7 @@ void BlackDrumAudioProcessor::prepareToPlay(double rate, int)
     roomDampingState[0] = roomDampingState[1] = 0.0f;
     roomInputState[0] = roomInputState[1] = 0.0f;
     physicalExciter[0] = physicalExciter[1] = 0.0f;
+    pitchKickAge = 0.0f;
     physicalPrev[0] = physicalPrev[1] = 0.0f;
     physicalMembraneY1[0] = physicalMembraneY1[1] = physicalMembraneY2[0] = physicalMembraneY2[1] = 0.0f;
     for (auto& mode : physicalShellY1) for (auto& value : mode) value = 0.0f;
@@ -234,6 +235,17 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
     const int ch = juce::jlimit(0, 1, channel);
     const float v = juce::jlimit(0.0f, 1.0f, velocity);
 
+    // Pitch Drop / Tension Kick: the effective membrane tension is briefly
+    // elevated by a hard strike, then settles slightly below the base pitch
+    // before returning to neutral. This is a timbral/mechanical pitch motion,
+    // not a change to the source WAV playback rate.
+    const float hard = std::pow(v, 1.8f);
+    const float t = juce::jmax(0.0f, pitchKickAge) / (float)juce::jmax(1.0, outputRate);
+    const float attackCents = (2.0f + 18.0f * hard) * std::exp(-t / 0.0045f);
+    const float settlingCents = (1.0f + 14.0f * hard) * std::exp(-t / 0.018f);
+    const float pitchKickCents = attackCents - settlingCents;
+    const float pitchKickRatio = std::pow(2.0f, pitchKickCents / 1200.0f);
+
     const float edge = input - physicalPrev[ch];
     physicalPrev[ch] = input;
     physicalExciter[ch] += (0.075f + 0.055f * v) * (edge - physicalExciter[ch]);
@@ -245,9 +257,9 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
     // Center emphasizes the fundamental/body; edge progressively excites upper modes.
     const float centerWeight = 1.0f - hitPosition;
     const float edgeWeight = hitPosition;
-    const float membraneFreq = 155.0f
+    const float membraneFreq = (155.0f
         + 105.0f * std::sqrt(v)
-        + 34.0f * edgeWeight;
+        + 34.0f * edgeWeight) * pitchKickRatio;
     const float membraneRadius = juce::jlimit(0.93f, 0.979f,
         (0.965f + 0.014f * v - 0.010f * edgeWeight)
         * hitMicroTension);
@@ -372,6 +384,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 hitMicroAttackPosition = nextRandom() * (0.020f + 0.020f * v);
                 hitMicroPhase = nextRandom() * juce::MathConstants<float>::pi;
                 hitMicroDecay = 1.0f + nextRandom() * (0.010f + 0.020f * v);
+                pitchKickAge = 0.0f;
 
                 // Hit Position Morph is now a manual control. MIDI velocity still
                 // changes the hit's dynamics, while this knob chooses the modal strike point.
@@ -865,6 +878,8 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
 
             out.setSample(ch, i, std::tanh(living));
         }
+        // Advance the tension-kick envelope once per output sample, not once per channel.
+        pitchKickAge += 1.0f;
         const int activeLimit = juce::jlimit(1, 16, voiceCount.load());
         for (int vi = 0; vi < activeLimit; ++vi)
             if (voices[(size_t)vi].position >= 0.0)
