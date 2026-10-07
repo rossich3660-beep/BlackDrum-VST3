@@ -19,6 +19,8 @@ PhysicalSnareAudioProcessor::PhysicalSnareAudioProcessor()
     airCouplingParameter = parameters.getRawParameterValue("AIR");
     shellParameter = parameters.getRawParameterValue("SHELL");
     depthParameter = parameters.getRawParameterValue("DEPTH");
+    snareParameter = parameters.getRawParameterValue("SNARE");
+    wireParameter = parameters.getRawParameterValue("WIRE");
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -60,6 +62,14 @@ PhysicalSnareAudioProcessor::createParameterLayout()
         "DEPTH", "Depth",
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.45f));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "SNARE", "Snare",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.65f));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "WIRE", "Wire",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.75f));
+
     return { params.begin(), params.end() };
 }
 
@@ -70,6 +80,7 @@ void PhysicalSnareAudioProcessor::prepareToPlay(double sampleRate, int)
 
     membrane.prepare(safeRate);
     shell.prepare(safeRate);
+    snareWires.prepare(safeRate);
 
     membrane.setParameters(
         tuningParameter != nullptr ? tuningParameter->load() : 185.0f,
@@ -85,6 +96,11 @@ void PhysicalSnareAudioProcessor::prepareToPlay(double sampleRate, int)
         shellParameter != nullptr ? shellParameter->load() : 0.55f,
         depthParameter != nullptr ? depthParameter->load() : 0.45f);
 
+    snareWires.setParameters(
+        snareParameter != nullptr ? snareParameter->load() : 0.65f,
+        wireParameter != nullptr ? wireParameter->load() : 0.75f,
+        dampingParameter != nullptr ? dampingParameter->load() : 0.40f);
+
     lastMidiNote.store(-1, std::memory_order_relaxed);
     lastMidiVelocity.store(0, std::memory_order_relaxed);
 }
@@ -93,6 +109,7 @@ void PhysicalSnareAudioProcessor::releaseResources()
 {
     membrane.reset();
     shell.reset();
+    snareWires.reset();
 }
 
 void PhysicalSnareAudioProcessor::processBlock(
@@ -116,12 +133,19 @@ void PhysicalSnareAudioProcessor::processBlock(
         shellParameter != nullptr ? shellParameter->load() : 0.55f;
     const float depth =
         depthParameter != nullptr ? depthParameter->load() : 0.45f;
+    const float snare =
+        snareParameter != nullptr ? snareParameter->load() : 0.65f;
+    const float wire =
+        wireParameter != nullptr ? wireParameter->load() : 0.75f;
 
     membrane.setParameters(
         tune, damp, hit, bottom, air);
 
     shell.setParameters(
         tune, bottom, damp, shellAmount, depth);
+
+    snareWires.setParameters(
+        snare, wire, damp);
 
     auto event = midiMessages.cbegin();
     const auto end = midiMessages.cend();
@@ -153,10 +177,17 @@ void PhysicalSnareAudioProcessor::processBlock(
 
                 membrane.trigger(midiVelocity);
 
-                shell.trigger(
+                const float impactEnergy =
                     0.055f + 1.15f * std::pow(
                         juce::jlimit(0.0f, 1.0f, midiVelocity),
-                        1.28f),
+                        1.28f);
+
+                shell.trigger(
+                    impactEnergy,
+                    midiVelocity);
+
+                snareWires.trigger(
+                    impactEnergy,
                     midiVelocity);
             }
             else if (message.isNoteOff())
@@ -173,11 +204,22 @@ void PhysicalSnareAudioProcessor::processBlock(
         const float shellSample =
             shell.processSample(membraneSample);
 
+        const float bottomContact =
+            membrane.getBottomContactSignal();
+
+        const float wireSample =
+            snareWires.processSample(bottomContact);
+
+        const float combinedSample =
+            shellSample
+            + wireSample
+              * (0.50f + 0.55f * wire);
+
         const float sample =
             juce::jlimit(
                 -1.0f,
                 1.0f,
-                shellSample * outputLevel);
+                combinedSample * outputLevel);
 
         for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
             buffer.setSample(channel, sampleIndex, sample);
