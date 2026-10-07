@@ -3,7 +3,7 @@
 BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(620, 390);
+    setSize(900, 570);
     title.setText("BLACKDRUM", juce::dontSendNotification);
     title.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -14,17 +14,148 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     filename.setColour(juce::Label::textColourId, juce::Colour(0xffeeeeee));
     addAndMakeVisible(filename);
 
-    hint.setText("Drop an audio file here  •  WAV / AIFF / FLAC / OGG", juce::dontSendNotification);
+    hint.setText("Drop an audio file here - WAV / AIFF / FLAC / OGG", juce::dontSendNotification);
     hint.setJustificationType(juce::Justification::centred);
     hint.setColour(juce::Label::textColourId, juce::Colour(0xff929292));
     addAndMakeVisible(hint);
 
-    for (auto* b : { &loadButton, &playButton, &removeButton })
+    voiceCountLabel.setText("VOICES", juce::dontSendNotification);
+    voiceCountLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    voiceCountLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(voiceCountLabel);
+    voiceCountSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    voiceCountSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 38, 20);
+    voiceCountSlider.setRange(1, 16, 1);
+    voiceCountSlider.setValue(processor.getVoiceCount(), juce::dontSendNotification);
+    voiceCountSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xff66bbff));
+    voiceCountSlider.onValueChange = [this] { processor.setVoiceCount((int)voiceCountSlider.getValue()); };
+    addAndMakeVisible(voiceCountSlider);
+
+    bodyMixLabel.setText("BODY MIX", juce::dontSendNotification);
+    bodyMixLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    bodyMixLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(bodyMixLabel);
+    bodyMixSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    bodyMixSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    bodyMixSlider.setRange(0.0, 1.0, 0.01);
+    bodyMixSlider.setValue(processor.getBodyMix(), juce::dontSendNotification);
+    bodyMixSlider.setNumDecimalPlacesToDisplay(0);
+    bodyMixSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    bodyMixSlider.onValueChange = [this] { processor.setBodyMix((float)bodyMixSlider.getValue()); };
+    addAndMakeVisible(bodyMixSlider);
+
+
+    auto setupKnob = [this](juce::Slider& slider, juce::Label& label, const juce::String& text, float initial, std::function<void(float)> setter)
+    {
+        label.setText(text, juce::dontSendNotification);
+        label.setColour(juce::Label::textColourId, juce::Colours::white);
+        label.setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(label);
+        slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+        slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        slider.setRange(0.0, 1.0, 0.01);
+        slider.setValue(initial, juce::dontSendNotification);
+        slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+        slider.onValueChange = [&slider, setter] { setter((float)slider.getValue()); };
+        addAndMakeVisible(slider);
+    };
+    setupKnob(compressorSlider, compressorLabel, "COMPRESSOR", processor.getCompressorMix(), [this](float v){ processor.setCompressorMix(v); });
+    setupKnob(roomReverbSlider, roomReverbLabel, "ROOM REVERB", processor.getRoomReverbMix(), [this](float v){ processor.setRoomReverbMix(v); });
+    setupKnob(physicalSynthSlider, physicalSynthLabel, "PHYSICAL SYNTH", processor.getPhysicalSynthMix(), [this](float v){ processor.setPhysicalSynthMix(v); });
+    setupKnob(wireCollisionSlider, wireCollisionLabel, "WIRE COLLISION", processor.getWireCollisionMix(), [this](float v){ processor.setWireCollisionMix(v); });
+    setupKnob(hitPositionSlider, hitPositionLabel, "HIT POSITION", processor.getHitPositionMorph(), [this](float v){ processor.setHitPositionMorph(v); });
+    hitPositionSlider.setNumDecimalPlacesToDisplay(0);
+    hitPositionSlider.setTooltip("0% = CENTER, 50% = MID, 100% = EDGE");
+    hitPositionLabel.setTooltip("Manual strike position: CENTER -> MID -> EDGE");
+    setupKnob(attackSlider, attackLabel, "ATTACK", processor.getTransient(), [this](float v){ processor.setTransient(v); });
+    setupKnob(sustainSlider, sustainLabel, "SUSTAIN", processor.getSustain(), [this](float v){ processor.setSustain(v); });
+    setupKnob(dynamicSlider, dynamicLabel, "DYNAMIC RESPONSE", processor.getDynamicResponse(), [this](float v){ processor.setDynamicResponse(v); });
+
+    membraneTitle.setText("MEMBRANE MODELING", juce::dontSendNotification);
+    membraneTitle.setFont(juce::Font(juce::FontOptions(19.0f, juce::Font::bold)));
+    membraneTitle.setColour(juce::Label::textColourId, juce::Colour(0xffd8eaf5));
+    addAndMakeVisible(membraneTitle);
+    membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
+    membraneToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
+    membraneToggle.onClick = [this] { processor.setMembraneEnabled(membraneToggle.getToggleState()); };
+    addAndMakeVisible(membraneToggle);
+    setupKnob(tensionSlider, tensionLabel, "TENSION", processor.getMembraneTension(), [this](float v){ processor.setMembraneTension(v); });
+    setupKnob(stiffnessSlider, stiffnessLabel, "STIFFNESS", processor.getMembraneStiffness(), [this](float v){ processor.setMembraneStiffness(v); });
+    setupKnob(decaySlider, decayLabel, "DECAY", processor.getMembraneDecay(), [this](float v){ processor.setMembraneDecay(v); });
+    setupKnob(velocitySlider, velocityLabel, "VELOCITY SENS", processor.getMembraneVelocity(), [this](float v){ processor.setMembraneVelocity(v); });
+
+    for (auto* b : { &loadButton, &playButton, &removeButton, &savePresetButton, &loadPresetButton })
     {
         addAndMakeVisible(*b);
         b->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff292929));
         b->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     }
+
+    wireLabel.setText("WIRE NOISE", juce::dontSendNotification);
+    wireLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    wireLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(wireLabel);
+    wireSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    wireSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    wireSlider.setRange(0.0, 1.0, 0.01);
+    wireSlider.setValue(processor.getWireNoiseMix(), juce::dontSendNotification);
+    wireSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    wireSlider.onValueChange = [this] { processor.setWireNoiseMix((float)wireSlider.getValue()); };
+    addAndMakeVisible(wireSlider);
+
+    phaseVocoderLabel.setText("PHASE MORPH", juce::dontSendNotification);
+    phaseVocoderLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    phaseVocoderLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(phaseVocoderLabel);
+    phaseVocoderSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    phaseVocoderSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    phaseVocoderSlider.setRange(0.0, 1.0, 0.01);
+    phaseVocoderSlider.setValue(processor.getPhaseVocoderMix(), juce::dontSendNotification);
+    phaseVocoderSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff66bbff));
+    phaseVocoderSlider.onValueChange = [this] { processor.setPhaseVocoderMix((float)phaseVocoderSlider.getValue()); };
+    addAndMakeVisible(phaseVocoderSlider);
+
+    savePresetButton.onClick = [this]
+    {
+        if (presetChooser != nullptr)
+            return;
+        presetChooser = std::make_unique<juce::FileChooser>(
+            "Save BlackDrum preset", juce::File{}, "*.blackdrum");
+        juce::Component::SafePointer<BlackDrumAudioProcessorEditor> safeThis(this);
+        presetChooser->launchAsync(
+            juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+            [safeThis](const juce::FileChooser& chooser)
+            {
+                if (safeThis == nullptr) return;
+                auto file = chooser.getResult();
+                safeThis->presetChooser.reset();
+                if (file != juce::File{})
+                {
+                    if (!file.hasFileExtension(".blackdrum"))
+                        file = file.withFileExtension(".blackdrum");
+                    safeThis->savePresetTo(file);
+                }
+            });
+    };
+
+    loadPresetButton.onClick = [this]
+    {
+        if (presetChooser != nullptr)
+            return;
+        presetChooser = std::make_unique<juce::FileChooser>(
+            "Load BlackDrum preset", juce::File{}, "*.blackdrum");
+        juce::Component::SafePointer<BlackDrumAudioProcessorEditor> safeThis(this);
+        presetChooser->launchAsync(
+            juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+            [safeThis](const juce::FileChooser& chooser)
+            {
+                if (safeThis == nullptr) return;
+                const auto file = chooser.getResult();
+                safeThis->presetChooser.reset();
+                if (file.existsAsFile())
+                    safeThis->loadPresetFrom(file);
+            });
+    };
 
     loadButton.onClick = [this]
     {
@@ -65,6 +196,56 @@ BlackDrumAudioProcessorEditor::BlackDrumAudioProcessorEditor(BlackDrumAudioProce
     };
 }
 
+void BlackDrumAudioProcessorEditor::savePresetTo(const juce::File& file)
+{
+    const auto state = processor.createPresetState();
+    if (auto xml = state.createXml())
+    {
+        xml->setAttribute("presetName", file.getFileNameWithoutExtension());
+        if (file.replaceWithText(xml->toString()))
+            hint.setText("Preset saved: " + file.getFileName(), juce::dontSendNotification);
+        else
+            hint.setText("Could not save preset", juce::dontSendNotification);
+    }
+}
+
+void BlackDrumAudioProcessorEditor::loadPresetFrom(const juce::File& file)
+{
+    const auto xml = juce::parseXML(file);
+    if (xml == nullptr)
+    {
+        hint.setText("Invalid BlackDrum preset", juce::dontSendNotification);
+        return;
+    }
+
+    const auto state = juce::ValueTree::fromXml(*xml);
+    if (!processor.applyPresetState(state))
+    {
+        hint.setText("Invalid BlackDrum preset", juce::dontSendNotification);
+        return;
+    }
+
+    filename.setText(processor.sampleName().isNotEmpty() ? processor.sampleName() : "No sample loaded",
+                     juce::dontSendNotification);
+    voiceCountSlider.setValue(processor.getVoiceCount(), juce::dontSendNotification);
+    bodyMixSlider.setValue(processor.getBodyMix(), juce::dontSendNotification);
+    wireSlider.setValue(processor.getWireNoiseMix(), juce::dontSendNotification);
+    attackSlider.setValue(processor.getTransient(), juce::dontSendNotification);
+    sustainSlider.setValue(processor.getSustain(), juce::dontSendNotification);
+    dynamicSlider.setValue(processor.getDynamicResponse(), juce::dontSendNotification);
+    compressorSlider.setValue(processor.getCompressorMix(), juce::dontSendNotification);
+    roomReverbSlider.setValue(processor.getRoomReverbMix(), juce::dontSendNotification);
+    physicalSynthSlider.setValue(processor.getPhysicalSynthMix(), juce::dontSendNotification);
+    wireCollisionSlider.setValue(processor.getWireCollisionMix(), juce::dontSendNotification);
+    hitPositionSlider.setValue(processor.getHitPositionMorph(), juce::dontSendNotification);
+    membraneToggle.setToggleState(processor.getMembraneEnabled(), juce::dontSendNotification);
+    tensionSlider.setValue(processor.getMembraneTension(), juce::dontSendNotification);
+    stiffnessSlider.setValue(processor.getMembraneStiffness(), juce::dontSendNotification);
+    decaySlider.setValue(processor.getMembraneDecay(), juce::dontSendNotification);
+    velocitySlider.setValue(processor.getMembraneVelocity(), juce::dontSendNotification);
+    hint.setText("Preset loaded safely", juce::dontSendNotification);
+}
+
 bool BlackDrumAudioProcessorEditor::isSupportedAudioFile(const juce::File& file) const
 {
     const auto ext = file.getFileExtension().toLowerCase();
@@ -82,7 +263,7 @@ void BlackDrumAudioProcessorEditor::loadFrom(const juce::File& file)
 
     if (processor.loadSample(file))
     {
-        filename.setText(file.getFileName() + "  •  "
+        filename.setText(file.getFileName() + " - "
             + juce::String(static_cast<juce::int64>(file.getSize() / 1024)) + " KB",
             juce::dontSendNotification);
         hint.setText("Sample loaded successfully", juce::dontSendNotification);
@@ -130,34 +311,69 @@ void BlackDrumAudioProcessorEditor::filesDropped(const juce::StringArray& files,
 
 void BlackDrumAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff111111));
-    auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(0xff1b1b1b));
-    g.fillRoundedRectangle(bounds.reduced(14.0f), 14.0f);
-    g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff303030));
-    g.drawRoundedRectangle(bounds.reduced(14.0f), 14.0f, dragHover ? 2.5f : 1.0f);
-
-    auto area = juce::Rectangle<float>(35.0f, 112.0f, static_cast<float>(getWidth() - 70), 190.0f);
-    g.setColour(dragHover ? juce::Colour(0xff202a33) : juce::Colour(0xff151515));
-    g.fillRoundedRectangle(area, 12.0f);
-    g.setColour(dragHover ? juce::Colour(0xff66bbff) : juce::Colour(0xff484848));
-    g.drawRoundedRectangle(area, 12.0f, 1.5f);
-
-    g.setColour(juce::Colour(0xffbdbdbd));
-    g.drawEllipse(getWidth() / 2.0f - 22.0f, 145.0f, 44.0f, 44.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f, 155.0f, getWidth() / 2.0f, 179.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f - 8.0f, 170.0f, getWidth() / 2.0f, 179.0f, 2.0f);
-    g.drawLine(getWidth() / 2.0f + 8.0f, 170.0f, getWidth() / 2.0f, 179.0f, 2.0f);
+    // Keep drawing intentionally simple: fewer custom graphics means fewer UI-specific build risks.
+    g.fillAll(juce::Colour(0xff202326));
+    g.setColour(juce::Colour(0xff353a3e));
+    g.drawRect(getLocalBounds().reduced(8), 1);
 }
-
 void BlackDrumAudioProcessorEditor::resized()
 {
-    auto r = getLocalBounds();
-    title.setBounds(35, 28, 300, 45);
-    dropArea = r.withTrimmedTop(110).withTrimmedBottom(90);
-    hint.setBounds(45, 215, getWidth() - 90, 30);
-    filename.setBounds(45, 260, getWidth() - 90, 25);
-    loadButton.setBounds(65, 325, 150, 38);
-    playButton.setBounds(235, 325, 150, 38);
-    removeButton.setBounds(405, 325, 150, 38);
+    const int margin = 20;
+    title.setBounds(margin, 12, 240, 36);
+
+    // Main processing controls: two compact rows, with labels kept separate from knobs.
+    const int knobW = 64;
+    const int colW = 112;
+    const int startX = 24;
+    const int row1LabelY = 62, row1KnobY = 82;
+    const int row2LabelY = 170, row2KnobY = 190;
+    auto place = [&](juce::Label& label, juce::Slider& slider, int index, int row)
+    {
+        const int x = startX + index * colW;
+        const int ly = row == 0 ? row1LabelY : row2LabelY;
+        const int ky = row == 0 ? row1KnobY : row2KnobY;
+        label.setBounds(x, ly, colW - 8, 20);
+        slider.setBounds(x + (colW - knobW) / 2 - 4, ky, knobW, knobW);
+    };
+    place(bodyMixLabel, bodyMixSlider, 0, 0);
+    place(wireLabel, wireSlider, 2, 0);
+    place(phaseVocoderLabel, phaseVocoderSlider, 3, 0);
+    place(attackLabel, attackSlider, 0, 1);
+    place(sustainLabel, sustainSlider, 1, 1);
+    place(dynamicLabel, dynamicSlider, 2, 1);
+
+    membraneTitle.setBounds(470, 62, 250, 24);
+    membraneToggle.setBounds(470, 88, 220, 26);
+    auto placeMem = [&](juce::Label& label, juce::Slider& slider, int index)
+    {
+        const int x = 470 + index * 100;
+        label.setBounds(x, 142, 96, 20);
+        slider.setBounds(x + 14, 164, 64, 64);
+    };
+    placeMem(tensionLabel, tensionSlider, 0);
+    placeMem(stiffnessLabel, stiffnessSlider, 1);
+    placeMem(decayLabel, decaySlider, 2);
+    placeMem(velocityLabel, velocitySlider, 3);
+
+    voiceCountLabel.setBounds(470, 250, 100, 24);
+    voiceCountSlider.setBounds(570, 250, 180, 24);
+    hint.setBounds(margin, 300, getWidth() - 2 * margin, 24);
+    filename.setBounds(margin, 326, getWidth() - 2 * margin, 24);
+    loadButton.setBounds(120, 390, 170, 36);
+    playButton.setBounds(365, 390, 170, 36);
+    removeButton.setBounds(610, 390, 170, 36);
+    // Living controls stay together in the lower-left area and have their own
+    // row, so they cannot overlap the existing processing controls.
+    compressorLabel.setBounds(24, 430, 112, 20);
+    compressorSlider.setBounds(48, 450, 64, 64);
+    roomReverbLabel.setBounds(148, 430, 112, 20);
+    roomReverbSlider.setBounds(172, 450, 64, 64);
+    physicalSynthLabel.setBounds(272, 430, 112, 20);
+    physicalSynthSlider.setBounds(296, 450, 64, 64);
+    wireCollisionLabel.setBounds(396, 430, 112, 20);
+    wireCollisionSlider.setBounds(420, 450, 64, 64);
+    hitPositionLabel.setBounds(520, 430, 112, 20);
+    hitPositionSlider.setBounds(544, 450, 64, 64);
+    savePresetButton.setBounds(625, 455, 120, 36);
+    loadPresetButton.setBounds(755, 455, 120, 36);
 }

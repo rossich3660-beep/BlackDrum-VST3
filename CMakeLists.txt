@@ -16,4 +16,4 @@ juce_add_plugin(BlackDrum
 juce_generate_juce_header(BlackDrum)
 target_sources(BlackDrum PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h)
 target_compile_definitions(BlackDrum PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-target_link_libraries(BlackDrum PRIVATE juce::juce_audio_utils juce::juce_audio_processors juce::juce_gui_extra PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+target_link_libraries(BlackDrum PRIVATE juce::juce_dsp juce::juce_audio_utils juce::juce_audio_processors juce::juce_gui_extra PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
