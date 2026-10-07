@@ -246,9 +246,14 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
     const float pitchKickCents = attackCents - settlingCents;
     const float pitchKickRatio = std::pow(2.0f, pitchKickCents / 1200.0f);
 
-    const float edge = input - physicalPrev[ch];
+    // The physical model must not turn a sharp sample onset into a second
+    // artificial click. Keep the membrane exciter responsive, but soften the
+    // derivative that feeds it so Dynamic Response cannot over-emphasize the
+    // source transient when Physical Synth is high.
+    const float rawEdge = input - physicalPrev[ch];
     physicalPrev[ch] = input;
-    physicalExciter[ch] += (0.075f + 0.055f * v) * (edge - physicalExciter[ch]);
+    const float edge = std::tanh(rawEdge * 2.0f);
+    physicalExciter[ch] += (0.030f + 0.018f * v) * (edge - physicalExciter[ch]);
     const float exciter = juce::jlimit(-1.0f, 1.0f, physicalExciter[ch] + 0.035f * input);
 
     const float hitPosition = juce::jlimit(0.0f, 1.0f,
@@ -538,7 +543,12 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
             // additive, low-level component rather than a crossfade replacement.
             const float bodyLevel = 0.22f + 0.18f * velocity;
             const float blended = raw + body * resonanceMix * bodyLevel;
-            const float physicalLayer = processPhysicalSynth(blended, fc, velocity);
+            // Dynamic Response shapes the sample performance curve. The
+            // physical membrane should still respond to the actual MIDI strike
+            // force, rather than re-amplifying the sample transient as Response
+            // rises. This keeps Physical Synth stable above roughly 50% Response.
+            const float physicalVelocity = juce::jlimit(0.0f, 1.0f, hitVelocity);
+            const float physicalLayer = processPhysicalSynth(blended, fc, physicalVelocity);
             const float shaped = std::tanh((blended + (bright - raw) * (0.10f + 0.16f * velocity) + physicalLayer)
                                            * voiceGain * transient * tailShape * 1.10f);
 
