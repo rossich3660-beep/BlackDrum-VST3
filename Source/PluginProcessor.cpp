@@ -678,15 +678,14 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                             gate += gateCoeff * (gateTarget - gate);
                             gate = juce::jlimit(0.0f, 1.0f, gate);
 
-                            // Each virtual wire gets its own bright/noisy resonant response.
-                            const float white = std::sin(
-                                (float)(wireIndex + 1) * 12.9898f
-                                + (float)(vce.position + 1.0) * 78.233f
-                                + phaseOffset * 3.17f);
-                            noiseState += 0.28f * (white - noiseState);
+                            // Use the same seeded stochastic source as the rest of the
+                            // wire bed instead of a position-dependent sine. The sine produced
+                            // a faint pitched/metallic whistle when many wires were active together.
+                            const float wireNoiseSource = vce.noiseLow[fc];
+                            noiseState += 0.22f * (wireNoiseSource - noiseState);
                             const float wireNoise = noiseState;
-                            const float noiseGate = gate * (0.20f + 0.80f * energy);
-                            const float noiseGain = (0.0025f + 0.0055f * vce.velocity)
+                            const float noiseGate = gate * (0.18f + 0.82f * energy);
+                            const float noiseGain = (0.0018f + 0.0040f * vce.velocity)
                                 * sensitivity * noiseGate;
                             stringCollision += wireNoise * noiseGain;
 
@@ -695,7 +694,7 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                             // lined up in the upper partials. The collision layer is
                             // intentionally noise/impact based instead.
                             const float contactBurst = collisionKick * gate
-                                * (0.0020f + 0.0035f * vce.velocity);
+                                * (0.0012f + 0.0024f * vce.velocity);
                             stringCollision += noiseState * contactBurst;
 
                             stringGateSum += gate;
