@@ -28,8 +28,13 @@ jobs:
       - name: Package VST3
         shell: pwsh
         run: |
-          $plugin = Get-ChildItem build -Recurse -Directory -Filter "PhysicalSnare.vst3" | Select-Object -First 1
-          if (-not $plugin) { throw "VST3 bundle not found" }
+          $plugin = Get-ChildItem build -Recurse -Directory -Filter "*.vst3" |
+            Where-Object { $_.Name -eq "Physical Snare.vst3" -or $_.Name -eq "PhysicalSnare.vst3" } |
+            Select-Object -First 1
+          if (-not $plugin) {
+            Get-ChildItem build -Recurse -Directory | Where-Object { $_.Name -like "*.vst3" }
+            throw "VST3 bundle not found"
+          }
           Compress-Archive -Path $plugin.FullName -DestinationPath PhysicalSnare-VST3-Windows.zip
 
       - uses: actions/upload-artifact@v4
