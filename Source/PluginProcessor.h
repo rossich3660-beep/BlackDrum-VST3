@@ -25,6 +25,8 @@ public:
     juce::String sampleName() const { return loadedFile.getFileName(); }
     juce::AudioBuffer<float> sampleCopy() const;
     double sampleRateOfFile() const { return sourceRate; }
+    void setSynthOnly(bool enabled) { synthOnly = enabled; }
+    bool isSynthOnly() const { return synthOnly; }
 
 private:
     juce::AudioFormatManager formats;
@@ -38,6 +40,7 @@ private:
     float resonatorB0=0.0f, resonatorB1=0.0f, resonatorB2=0.0f;
     float resonatorA1=0.0f, resonatorA2=0.0f;
     float hitVelocity=0.5f;
+    bool synthOnly=false;
     juce::CriticalSection sampleLock;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BlackDrumAudioProcessor)
 };
