@@ -158,7 +158,11 @@ void SnareMembraneModel::trigger(float velocity01)
     // A real hit changes the pressure inside the shell immediately.
     // Keeping the cavity state here makes fast MIDI repetitions interact
     // with the previous hit instead of resetting the acoustic space.
-    airVelocity += 0.0025f * impactEnergy * (0.65f + 0.35f * velocity);
+    if (airCoupling01 > 0.0f)
+    {
+        airVelocity += 0.018f * impactEnergy * airCoupling01;
+        airDisplacement += 0.00035f * impactEnergy * airCoupling01;
+    }
 }
 
 void SnareMembraneModel::driveBottomFromAir(float pressure, float coupling)
@@ -187,7 +191,11 @@ void SnareMembraneModel::driveBottomFromAir(float pressure, float coupling)
 
     auto& voice = bottomHead.voices[(size_t) voiceIndex];
 
-    constexpr float baseDrive = 0.00018f;
+    // The previous value was far too small to make the lower head
+    // perceptible. This remains a bounded pressure coupling, but gives
+    // AIR a real acoustic consequence and lets BOTTOM change the pitch
+    // of the coupled lower-head resonances.
+    const float baseDrive = 0.10f + 0.18f * coupling;
 
     for (int i = 0; i < NumModes; ++i)
     {
@@ -223,7 +231,7 @@ void SnareMembraneModel::applyTopAirFeedback(float pressure, float coupling)
             i == 0 ? 1.0f : 0.35f / (1.0f + 0.08f * static_cast<float>(i));
 
         mode.amplitude -=
-            pressure * coupling * 0.000045f * feedbackWeight;
+            pressure * coupling * 0.00016f * feedbackWeight;
 
         mode.amplitude = juce::jlimit(-0.16f, 0.16f, mode.amplitude);
     }
@@ -292,8 +300,12 @@ float SnareMembraneModel::processSample()
 
     const float stiffness = omega * omega;
 
+    // The cavity is driven by the membrane difference, with the AIR knob
+    // controlling the actual transfer into the acoustic volume.
+    const float cavityDriveGain = 0.015f * coupling;
+
     const float acceleration =
-        (difference - airDisplacement) * stiffness * 0.035f
+        ((difference * cavityDriveGain) - airDisplacement) * stiffness * 0.08f
         - cavityDamping * omega * airVelocity;
 
     airVelocity += acceleration * dt;
@@ -303,17 +315,19 @@ float SnareMembraneModel::processSample()
     airVelocity = juce::jlimit(-90.0f, 90.0f, airVelocity);
 
     const float pressure =
-        juce::jlimit(-0.12f, 0.12f, airDisplacement * 2.4f);
+        juce::jlimit(-0.16f, 0.16f, airDisplacement * 3.2f);
 
     const float coupling = airCoupling01;
 
     driveBottomFromAir(pressure, coupling);
     applyTopAirFeedback(pressure, coupling);
 
-    const float top = topBeforeCoupling - pressure * 0.015f;
+    const float top = topBeforeCoupling - pressure * (0.012f + 0.010f * coupling);
     // Air-driven bottom modal energy is applied on the following sample;
     // do not process the whole bottom head a second time in the same sample.
-    const float bottom = bottomBeforeCoupling * 0.94f + pressure * 0.025f;
+    const float bottom =
+        bottomBeforeCoupling * (0.78f + 0.55f * coupling)
+        + pressure * (0.018f + 0.050f * coupling);
 
     return std::tanh((top + bottom * 0.80f) * 0.86f) * 0.78f;
 }
