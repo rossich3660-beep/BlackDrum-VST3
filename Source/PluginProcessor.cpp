@@ -357,13 +357,8 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 hitAttackVariation = 1.0f + nextRandom() * (0.035f + 0.035f * v);
                 hitResonanceVariation = 1.0f + nextRandom() * (0.04f + 0.06f * v);
                 hitNoiseVariation = 1.0f + nextRandom() * (0.10f + 0.12f * v);
-                // Hit Position Morph: quiet hits stay near center with a tiny random
-                // offset; medium hits are centered; hard hits move gently toward edge.
-                const float randomOffset = nextRandom() * (0.035f + 0.025f * (1.0f - v));
-                const float velocityEdge = juce::jlimit(0.0f, 1.0f,
-                    0.08f + 0.42f * std::pow(v, 1.55f));
-                hitPositionMorph.store(juce::jlimit(0.0f, 1.0f,
-                    0.50f + velocityEdge + randomOffset));
+                // Hit Position Morph is now a manual control. MIDI velocity still
+                // changes the hit's dynamics, while this knob chooses the modal strike point.
                 const float response = dynamicResponse.load();
                 const float exponent = 1.8f - 1.25f * response;
                 const float shapedVelocity = std::pow(v, exponent);
@@ -882,6 +877,7 @@ juce::ValueTree BlackDrumAudioProcessor::makeStateTree() const
     state.setProperty("roomReverbMix", getRoomReverbMix(), nullptr);
     state.setProperty("physicalSynthMix", getPhysicalSynthMix(), nullptr);
     state.setProperty("wireCollisionMix", getWireCollisionMix(), nullptr);
+    state.setProperty("hitPositionMorph", getHitPositionMorph(), nullptr);
     state.setProperty("transient", getTransient(), nullptr);
     state.setProperty("sustain", getSustain(), nullptr);
     state.setProperty("dynamicResponse", getDynamicResponse(), nullptr);
@@ -912,6 +908,7 @@ bool BlackDrumAudioProcessor::restoreStateTree(const juce::ValueTree& state)
     setRoomReverbMix((float) state.getProperty("roomReverbMix", getRoomReverbMix()));
     setPhysicalSynthMix((float) state.getProperty("physicalSynthMix", getPhysicalSynthMix()));
     setWireCollisionMix((float) state.getProperty("wireCollisionMix", getWireCollisionMix()));
+    setHitPositionMorph((float) state.getProperty("hitPositionMorph", getHitPositionMorph()));
     setTransient((float) state.getProperty("transient", getTransient()));
     setSustain((float) state.getProperty("sustain", getSustain()));
     setDynamicResponse((float) state.getProperty("dynamicResponse", getDynamicResponse()));
