@@ -144,6 +144,8 @@ private:
     // Hybrid physical/modal synthesis layer. Default is bypassed so the
     // existing BlackDrum sound is unchanged until the user turns it up.
     std::atomic<float> physicalSynthMix { 1.0f };
+    // Smoothed DSP copy prevents clicks when Physical Synth is automated or moved.
+    float physicalSynthMixSmoothed = 1.0f;
     // Manual strike position: 0=center, 0.5=mid, 1=edge.
     std::atomic<float> hitPositionMorph { 0.5f };
     std::atomic<float> wireCollisionMix { 0.35f };
