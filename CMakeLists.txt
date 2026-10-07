@@ -38,6 +38,8 @@ target_sources(PhysicalSnare PRIVATE
     Source/MembraneModel.h
     Source/ShellModel.cpp
     Source/ShellModel.h
+    Source/WireModel.cpp
+    Source/WireModel.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
 )
