@@ -11,9 +11,13 @@ public:
     void prepare(double sampleRate);
     void reset();
 
-    void setParameters(float tuningHz, float damping01, float hitPosition01);
-    void trigger(float velocity01);
+    void setParameters(float topTuningHz,
+                       float damping01,
+                       float hitPosition01,
+                       float bottomTuningHz,
+                       float airCoupling01);
 
+    void trigger(float velocity01);
     float processSample();
 
 private:
@@ -39,19 +43,35 @@ private:
         unsigned int age = 0;
     };
 
-    static float besselJ(int order, float x);
-    static float besselJ0(float x);
-    static float besselJ1(float x);
+    struct Head
+    {
+        std::array<Voice, MaxVoices> voices {};
+    };
+
     static float besselJn(int order, float x);
+    static float besselJ(int order, float x);
 
-    int chooseVoice() noexcept;
+    int chooseVoice(Head&) noexcept;
+    int findActiveVoice(Head&) const noexcept;
 
-    std::array<Voice, MaxVoices> voices {};
+    float processHead(Head&);
+    void configureVoice(Voice&, float tuningHz, float baseDecaySeconds);
+    void driveBottomFromAir(float pressure, float coupling);
+    void applyTopAirFeedback(float pressure, float coupling);
+
+    Head topHead;
+    Head bottomHead;
+
     double sampleRate = 44100.0;
 
-    float tuningHz = 185.0f;
+    float topTuningHz = 185.0f;
+    float bottomTuningHz = 170.0f;
     float damping01 = 0.40f;
-    float hitPosition01 = 0.50f;
+    float hitPosition01 = 0.35f;
+    float airCoupling01 = 0.35f;
+
+    float airDisplacement = 0.0f;
+    float airVelocity = 0.0f;
 
     unsigned int ageCounter = 0;
 
