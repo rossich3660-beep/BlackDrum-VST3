@@ -162,6 +162,7 @@ private:
     int pvInputWrite = 0;
     int pvHopCounter = 0;
     uint64_t pvSampleCounter = 0;
+    float pvPreviousFrameEnergy = 0.0f;
     std::atomic<float> transientAmount { 0.0f };
     std::atomic<float> sustainAmount { 0.87f };
     std::atomic<float> dynamicResponse { 0.87f };
