@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(PhysicalSnare VERSION 0.1.0)
+project(PhysicalSnare VERSION 0.2.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,8 @@ juce_generate_juce_header(PhysicalSnare)
 target_sources(PhysicalSnare PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
+    Source/MembraneModel.cpp
+    Source/MembraneModel.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
 )
