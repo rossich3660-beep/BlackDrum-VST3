@@ -153,7 +153,7 @@ float SnareMembraneModel::processSample()
     return std::tanh(mix * 0.72f) * 0.72f;
 }
 
-float SnareMembraneModel::besselJ(float order, float x)
+float SnareMembraneModel::besselJ(int order, float x)
 {
     return besselJn((int) order, x);
 }
