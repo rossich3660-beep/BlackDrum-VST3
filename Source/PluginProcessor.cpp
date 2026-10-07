@@ -50,9 +50,6 @@ void BlackDrumAudioProcessor::resetPhaseVocoder()
     pvNormRing.fill(0.0f);
     pvPreviousPhase.fill(0.0f);
     pvSynthesisPhase.fill(0.0f);
-    pvPreviousMagnitude.fill(0.0f);
-    pvCurrentMagnitude.fill(0.0f);
-    pvCurrentPhase.fill(0.0f);
     pvInputWrite = 0;
     pvHopCounter = 0;
     pvSampleCounter = 0;
@@ -76,9 +73,9 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
     {
         pvHopCounter = 0;
 
-        // Analyze the most recent frame.  Identity/peak phase locking is used
-        // here because a snare transient depends strongly on vertical phase
-        // coherence between neighboring bins.
+        // Analyze the most recent 1024 samples. The Hann window keeps the
+        // overlap-add reconstruction stable while the phase accumulator keeps
+        // neighboring frames phase-coherent.
         for (int n = 0; n < pvFFTSize; ++n)
         {
             const int ringIndex = (pvInputWrite + n) % pvFFTSize;
@@ -89,17 +86,18 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
 
         phaseVocoderFFT.performRealOnlyForwardTransform(pvFFTBuffer.data());
 
-        float spectralFlux = 0.0f;
-        float spectralMass = 1.0e-9f;
-
         for (int k = 0; k < pvBins; ++k)
         {
             float real = 0.0f;
             float imag = 0.0f;
             if (k == 0)
+            {
                 real = pvFFTBuffer[0];
+            }
             else if (k == pvFFTSize / 2)
+            {
                 real = pvFFTBuffer[1];
+            }
             else
             {
                 real = pvFFTBuffer[(size_t) (2 * k)];
@@ -108,104 +106,30 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
 
             const float magnitude = std::sqrt(real * real + imag * imag) + 1.0e-9f;
             const float phase = std::atan2(imag, real);
-            pvCurrentMagnitude[(size_t) k] = magnitude;
-            pvCurrentPhase[(size_t) k] = phase;
+            const float expectedAdvance = twoPi * (float) k * (float) pvHopSize * invFFT;
+            float delta = phase - pvPreviousPhase[(size_t) k] - expectedAdvance;
 
-            spectralFlux += juce::jmax(0.0f, magnitude - pvPreviousMagnitude[(size_t) k]);
-            spectralMass += magnitude;
-            pvPreviousMagnitude[(size_t) k] = magnitude;
-
-            float delta = phase - pvPreviousPhase[(size_t) k]
-                - twoPi * (float) k * (float) pvHopSize * invFFT;
             while (delta > juce::MathConstants<float>::pi)
                 delta -= twoPi;
             while (delta < -juce::MathConstants<float>::pi)
                 delta += twoPi;
 
             pvPreviousPhase[(size_t) k] = phase;
+            const float trueAdvance = expectedAdvance + delta;
+            pvSynthesisPhase[(size_t) k] += trueAdvance;
 
-            // Store the instantaneous phase advance temporarily in synthesisPhase.
-            // It is replaced below with the peak-locked phase when appropriate.
-            pvSynthesisPhase[(size_t) k] +=
-                twoPi * (float) k * (float) pvHopSize * invFFT + delta;
-        }
-
-        // Spectral-flux onset detector. Percussive frames get stronger phase
-        // locking; steady-state frames retain the normal phase-vocoder motion.
-        const float transientStrength = juce::jlimit(
-            0.0f, 1.0f, spectralFlux / spectralMass * (3.2f + 2.0f * velocity));
-
-        // Find local spectral peaks. Neighbouring bins are attached to the
-        // strongest nearby peak, preserving their original phase relationship.
-        std::array<int, pvBins> peakForBin {};
-        for (int k = 0; k < pvBins; ++k)
-        {
-            int bestPeak = k;
-            float bestMagnitude = pvCurrentMagnitude[(size_t) k];
-            const int lo = juce::jmax(1, k - 4);
-            const int hi = juce::jmin(pvBins - 2, k + 4);
-            for (int p = lo; p <= hi; ++p)
-            {
-                const float m = pvCurrentMagnitude[(size_t) p];
-                if (m > pvCurrentMagnitude[(size_t) (p - 1)]
-                    && m >= pvCurrentMagnitude[(size_t) (p + 1)]
-                    && m > bestMagnitude * 0.72f)
-                {
-                    bestPeak = p;
-                    bestMagnitude = m;
-                }
-            }
-            peakForBin[(size_t) k] = bestPeak;
-        }
-
-        for (int k = 0; k < pvBins; ++k)
-        {
-            const float magnitude = pvCurrentMagnitude[(size_t) k];
-            const float phase = pvCurrentPhase[(size_t) k];
             const float normalizedFrequency = (float) k * invBins;
+            // Morph the spectral envelope rather than simply changing volume:
+            // stronger hits push energy toward the upper partials, while the
+            // control amount determines how far the spectrum moves from the
+            // original sample toward that velocity-shaped target.
+            const float highLift = std::pow(normalizedFrequency, 1.35f) * (0.85f + 0.75f * velocity);
+            const float lowTrim = (1.0f - normalizedFrequency) * (0.30f + 0.20f * (1.0f - velocity));
+            const float targetGain = juce::jlimit(0.25f, 2.5f, 1.0f + highLift - lowTrim);
+            const float morphedMagnitude = magnitude * ((1.0f - morphAmount) + morphAmount * targetGain);
 
-            const float highLift = std::pow(normalizedFrequency, 1.35f)
-                * (0.85f + 0.75f * velocity);
-            const float lowTrim = (1.0f - normalizedFrequency)
-                * (0.30f + 0.20f * (1.0f - velocity));
-            const float targetGain = juce::jlimit(
-                0.25f, 2.5f, 1.0f + highLift - lowTrim);
-            const float morphedMagnitude = magnitude
-                * ((1.0f - morphAmount) + morphAmount * targetGain);
-
-            const int peak = peakForBin[(size_t) k];
-            float independentPhase = pvSynthesisPhase[(size_t) k];
-
-            // Identity phase locking: keep the peak's propagated phase, but
-            // preserve the bin-to-peak phase offset measured in this frame.
-            float relativePhase = phase - pvCurrentPhase[(size_t) peak];
-            while (relativePhase > juce::MathConstants<float>::pi)
-                relativePhase -= twoPi;
-            while (relativePhase < -juce::MathConstants<float>::pi)
-                relativePhase += twoPi;
-
-            float lockedPhase = pvSynthesisPhase[(size_t) peak] + relativePhase;
-
-            // On a snare attack, progressively lock the vertical phase field.
-            // Away from an onset the normal independent phase-vocoder path wins.
-            const float localPeakStrength = juce::jlimit(
-                0.0f, 1.0f,
-                magnitude / (pvCurrentMagnitude[(size_t) peak] + 1.0e-9f));
-            const float lockAmount = transientStrength
-                * (0.72f + 0.18f * velocity)
-                * (0.35f + 0.65f * localPeakStrength);
-
-            float phaseDelta = lockedPhase - independentPhase;
-            while (phaseDelta > juce::MathConstants<float>::pi)
-                phaseDelta -= twoPi;
-            while (phaseDelta < -juce::MathConstants<float>::pi)
-                phaseDelta += twoPi;
-
-            const float finalPhase = independentPhase + lockAmount * phaseDelta;
-
-            const float outReal = morphedMagnitude * std::cos(finalPhase);
-            const float outImag = morphedMagnitude * std::sin(finalPhase);
-
+            const float outReal = morphedMagnitude * std::cos(pvSynthesisPhase[(size_t) k]);
+            const float outImag = morphedMagnitude * std::sin(pvSynthesisPhase[(size_t) k]);
             if (k == 0)
                 pvFFTBuffer[0] = outReal;
             else if (k == pvFFTSize / 2)
@@ -219,6 +143,9 @@ float BlackDrumAudioProcessor::processPhaseVocoder(float input, float morphAmoun
 
         phaseVocoderFFT.performRealOnlyInverseTransform(pvFFTBuffer.data());
 
+        // The frame is scheduled into a delayed output ring. This gives the
+        // phase-vocoder layer enough look-back for analysis without delaying
+        // the dry/transient path of the drum.
         const uint64_t frameStart = pvSampleCounter - (uint64_t) pvFFTSize + 1u;
         for (int n = 0; n < pvFFTSize; ++n)
         {
