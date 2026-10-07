@@ -3,6 +3,7 @@
 #include <atomic>
 #include "MembraneModel.h"
 #include "ShellModel.h"
+#include "WireModel.h"
 
 class PhysicalSnareAudioProcessor : public juce::AudioProcessor
 {
@@ -44,6 +45,7 @@ private:
     juce::AudioProcessorValueTreeState parameters;
     SnareMembraneModel membrane;
     SnareShellModel shell;
+    SnareWireModel snareWires;
 
     std::atomic<int> lastMidiNote { -1 };
     std::atomic<int> lastMidiVelocity { 0 };
@@ -56,6 +58,8 @@ private:
     std::atomic<float>* airCouplingParameter = nullptr;
     std::atomic<float>* shellParameter = nullptr;
     std::atomic<float>* depthParameter = nullptr;
+    std::atomic<float>* snareParameter = nullptr;
+    std::atomic<float>* wireParameter = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhysicalSnareAudioProcessor)
 };
