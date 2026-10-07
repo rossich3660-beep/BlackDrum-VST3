@@ -299,6 +299,7 @@ float SnareMembraneModel::processSample()
         juce::jmap(damping01, 0.0f, 1.0f, 0.055f, 0.16f);
 
     const float stiffness = omega * omega;
+    const float coupling = airCoupling01;
 
     // The cavity is driven by the membrane difference, with the AIR knob
     // controlling the actual transfer into the acoustic volume.
@@ -316,8 +317,6 @@ float SnareMembraneModel::processSample()
 
     const float pressure =
         juce::jlimit(-0.16f, 0.16f, airDisplacement * 3.2f);
-
-    const float coupling = airCoupling01;
 
     driveBottomFromAir(pressure, coupling);
     applyTopAirFeedback(pressure, coupling);
