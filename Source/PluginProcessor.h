@@ -121,6 +121,14 @@ private:
     float hitAttackVariation = 1.0f;
     float hitResonanceVariation = 1.0f;
     float hitNoiseVariation = 1.0f;
+    // Tiny per-hit physical variation. These values stay close to 1.0 so
+    // repeated identical MIDI notes differ in timbre, not in loudness.
+    float hitMicroTension = 1.0f;
+    float hitMicroWireSensitivity = 1.0f;
+    float hitMicroShellResonance = 1.0f;
+    float hitMicroAttackPosition = 0.0f;
+    float hitMicroPhase = 0.0f;
+    float hitMicroDecay = 1.0f;
     std::atomic<float> spectralMix { 0.0f };
     // Phase-vocoder spectral morphing: a deliberately small STFT layer blended
     // with the direct drum signal. It uses fixed-size, allocation-free state.
