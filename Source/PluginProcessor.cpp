@@ -239,15 +239,24 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
     physicalExciter[ch] += (0.075f + 0.055f * v) * (edge - physicalExciter[ch]);
     const float exciter = juce::jlimit(-1.0f, 1.0f, physicalExciter[ch] + 0.035f * input);
 
-    const float membraneFreq = 155.0f + 105.0f * std::sqrt(v);
-    const float membraneRadius = 0.965f + 0.014f * v;
+    const float hitPosition = juce::jlimit(0.0f, 1.0f, hitPositionMorph.load());
+    // Position changes modal excitation, not the source sample itself.
+    // Center emphasizes the fundamental/body; edge progressively excites upper modes.
+    const float centerWeight = 1.0f - hitPosition;
+    const float edgeWeight = hitPosition;
+    const float membraneFreq = 155.0f
+        + 105.0f * std::sqrt(v)
+        + 34.0f * edgeWeight;
+    const float membraneRadius = juce::jlimit(0.93f, 0.979f,
+        0.965f + 0.014f * v - 0.010f * edgeWeight);
     const float mw = 2.0f * juce::MathConstants<float>::pi * membraneFreq
                    / (float)juce::jmax(1.0, outputRate);
     const float mb = 1.0f - membraneRadius;
     const float ma1 = -2.0f * membraneRadius * std::cos(mw);
     const float ma2 = membraneRadius * membraneRadius;
     const float nonlinearExciter = std::tanh(exciter * (1.0f + 2.2f * v));
-    const float membrane = mb * nonlinearExciter
+    const float membraneGain = 0.90f + 0.10f * centerWeight;
+    const float membrane = membraneGain * mb * nonlinearExciter
                          - ma1 * physicalMembraneY1[ch]
                          - ma2 * physicalMembraneY2[ch];
     physicalMembraneY2[ch] = physicalMembraneY1[ch];
@@ -255,6 +264,8 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
 
     constexpr float shellFreq[3] = { 120.0f, 225.0f, 405.0f };
     constexpr float shellGain[3] = { 0.20f, 0.13f, 0.075f };
+    const float modalBodyGain = 1.0f - 0.18f * edgeWeight;
+    const float modalUpperGain = 1.0f + 0.30f * edgeWeight;
     float shell = 0.0f;
     for (int mode = 0; mode < 3; ++mode)
     {
@@ -269,10 +280,10 @@ float BlackDrumAudioProcessor::processPhysicalSynth(float input, int channel, fl
                       - a2 * physicalShellY2[mode][ch];
         physicalShellY2[mode][ch] = physicalShellY1[mode][ch];
         physicalShellY1[mode][ch] = y;
-        shell += y * shellGain[mode];
+        shell += y * shellGain[mode] * (mode == 0 ? modalBodyGain : modalUpperGain);
     }
 
-    const float brightness = 0.72f + 0.58f * v;
+    const float brightness = 0.72f + 0.58f * v + 0.16f * edgeWeight;
     const float physical = std::tanh((membrane * 0.52f + shell) * brightness);
     return juce::jlimit(-0.30f, 0.30f, physical * mix * (0.72f + 0.55f * v));
 }
@@ -346,6 +357,13 @@ void BlackDrumAudioProcessor::processBlock(juce::AudioBuffer<float>& out, juce::
                 hitAttackVariation = 1.0f + nextRandom() * (0.035f + 0.035f * v);
                 hitResonanceVariation = 1.0f + nextRandom() * (0.04f + 0.06f * v);
                 hitNoiseVariation = 1.0f + nextRandom() * (0.10f + 0.12f * v);
+                // Hit Position Morph: quiet hits stay near center with a tiny random
+                // offset; medium hits are centered; hard hits move gently toward edge.
+                const float randomOffset = nextRandom() * (0.035f + 0.025f * (1.0f - v));
+                const float velocityEdge = juce::jlimit(0.0f, 1.0f,
+                    0.08f + 0.42f * std::pow(v, 1.55f));
+                hitPositionMorph.store(juce::jlimit(0.0f, 1.0f,
+                    0.50f + velocityEdge + randomOffset));
                 const float response = dynamicResponse.load();
                 const float exponent = 1.8f - 1.25f * response;
                 const float shapedVelocity = std::pow(v, exponent);
