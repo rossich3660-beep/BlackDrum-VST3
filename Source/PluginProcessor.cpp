@@ -17,6 +17,8 @@ PhysicalSnareAudioProcessor::PhysicalSnareAudioProcessor()
     levelParameter = parameters.getRawParameterValue("LEVEL");
     bottomTuneParameter = parameters.getRawParameterValue("BOTTOM");
     airCouplingParameter = parameters.getRawParameterValue("AIR");
+    shellParameter = parameters.getRawParameterValue("SHELL");
+    depthParameter = parameters.getRawParameterValue("DEPTH");
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -50,12 +52,24 @@ PhysicalSnareAudioProcessor::createParameterLayout()
         "AIR", "Air",
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.35f));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "SHELL", "Shell",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.55f));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "DEPTH", "Depth",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.45f));
+
     return { params.begin(), params.end() };
 }
 
 void PhysicalSnareAudioProcessor::prepareToPlay(double sampleRate, int)
 {
-    membrane.prepare(sampleRate > 1000.0 ? sampleRate : 44100.0);
+    const double safeRate =
+        sampleRate > 1000.0 ? sampleRate : 44100.0;
+
+    membrane.prepare(safeRate);
+    shell.prepare(safeRate);
 
     membrane.setParameters(
         tuningParameter != nullptr ? tuningParameter->load() : 185.0f,
@@ -64,6 +78,13 @@ void PhysicalSnareAudioProcessor::prepareToPlay(double sampleRate, int)
         bottomTuneParameter != nullptr ? bottomTuneParameter->load() : 170.0f,
         airCouplingParameter != nullptr ? airCouplingParameter->load() : 0.35f);
 
+    shell.setParameters(
+        tuningParameter != nullptr ? tuningParameter->load() : 185.0f,
+        bottomTuneParameter != nullptr ? bottomTuneParameter->load() : 170.0f,
+        dampingParameter != nullptr ? dampingParameter->load() : 0.40f,
+        shellParameter != nullptr ? shellParameter->load() : 0.55f,
+        depthParameter != nullptr ? depthParameter->load() : 0.45f);
+
     lastMidiNote.store(-1, std::memory_order_relaxed);
     lastMidiVelocity.store(0, std::memory_order_relaxed);
 }
@@ -71,6 +92,7 @@ void PhysicalSnareAudioProcessor::prepareToPlay(double sampleRate, int)
 void PhysicalSnareAudioProcessor::releaseResources()
 {
     membrane.reset();
+    shell.reset();
 }
 
 void PhysicalSnareAudioProcessor::processBlock(
@@ -80,12 +102,26 @@ void PhysicalSnareAudioProcessor::processBlock(
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
 
+    const float tune =
+        tuningParameter != nullptr ? tuningParameter->load() : 185.0f;
+    const float damp =
+        dampingParameter != nullptr ? dampingParameter->load() : 0.40f;
+    const float hit =
+        hitPositionParameter != nullptr ? hitPositionParameter->load() : 0.35f;
+    const float bottom =
+        bottomTuneParameter != nullptr ? bottomTuneParameter->load() : 170.0f;
+    const float air =
+        airCouplingParameter != nullptr ? airCouplingParameter->load() : 0.35f;
+    const float shellAmount =
+        shellParameter != nullptr ? shellParameter->load() : 0.55f;
+    const float depth =
+        depthParameter != nullptr ? depthParameter->load() : 0.45f;
+
     membrane.setParameters(
-        tuningParameter != nullptr ? tuningParameter->load() : 185.0f,
-        dampingParameter != nullptr ? dampingParameter->load() : 0.40f,
-        hitPositionParameter != nullptr ? hitPositionParameter->load() : 0.35f,
-        bottomTuneParameter != nullptr ? bottomTuneParameter->load() : 170.0f,
-        airCouplingParameter != nullptr ? airCouplingParameter->load() : 0.35f);
+        tune, damp, hit, bottom, air);
+
+    shell.setParameters(
+        tune, bottom, damp, shellAmount, depth);
 
     auto event = midiMessages.cbegin();
     const auto end = midiMessages.cend();
@@ -111,7 +147,17 @@ void PhysicalSnareAudioProcessor::processBlock(
                     juce::roundToInt(message.getFloatVelocity() * 127.0f));
 
                 lastMidiVelocity.store(velocity, std::memory_order_relaxed);
-                membrane.trigger(message.getFloatVelocity());
+
+                const float midiVelocity =
+                    message.getFloatVelocity();
+
+                membrane.trigger(midiVelocity);
+
+                shell.trigger(
+                    0.055f + 1.15f * std::pow(
+                        juce::jlimit(0.0f, 1.0f, midiVelocity),
+                        1.28f),
+                    midiVelocity);
             }
             else if (message.isNoteOff())
             {
@@ -121,7 +167,17 @@ void PhysicalSnareAudioProcessor::processBlock(
             ++event;
         }
 
-        const float sample = membrane.processSample() * outputLevel;
+        const float membraneSample =
+            membrane.processSample();
+
+        const float shellSample =
+            shell.processSample(membraneSample);
+
+        const float sample =
+            juce::jlimit(
+                -1.0f,
+                1.0f,
+                shellSample * outputLevel);
 
         for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
             buffer.setSample(channel, sampleIndex, sample);
