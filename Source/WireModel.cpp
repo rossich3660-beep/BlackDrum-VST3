@@ -199,7 +199,7 @@ float SnareWireModel::processSample(
             * (0.015f + 0.045f * contact01);
 
         const float contactDrive =
-            juce::tanh(
+            std::tanh(
                 3.2f * (
                     compression
                     * (0.65f + 0.95f * contact01)
