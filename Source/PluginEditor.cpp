@@ -150,11 +150,6 @@ void PhysicalSnareAudioProcessorEditor::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xffff9d32));
     g.fillEllipse(hitX - 6.0f, topY - 6.0f, 12.0f, 12.0f);
 
-    const int sliderY = 332;
-    const int sliderW = 102;
-    const int gap = 24;
-    const int startX = 70;
-
     const char* labels[] = { "TUNE", "DAMP", "HIT", "LEVEL", "BOT", "AIR" };
     juce::Slider* sliders[] = {
         &tuneSlider, &dampingSlider, &hitPositionSlider,
@@ -163,20 +158,18 @@ void PhysicalSnareAudioProcessorEditor::paint(juce::Graphics& g)
 
     for (int i = 0; i < 6; ++i)
     {
-        const int x = startX + i * (sliderW + gap);
+        const auto bounds = sliders[i]->getBounds();
 
         g.setColour(juce::Colour(0xffc0c0c0));
         g.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
         g.drawFittedText(
             labels[i],
-            x,
-            sliderY - 16,
-            sliderW,
+            bounds.getX(),
+            bounds.getY() - 18,
+            bounds.getWidth(),
             14,
             juce::Justification::centred,
             1);
-
-        ignoreUnused(sliders);
     }
 }
 
